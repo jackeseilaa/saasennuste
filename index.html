@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.8</title>
+<title>Purjehdussää v1.9</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.8</span>
+  <span class="version">v1.9</span>
 </div>
 
 <div class="loc-bar">
@@ -237,7 +237,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.8';
+var APP_VERSION = 'v1.9';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -468,10 +468,11 @@ async function showRouteView(btn) {
   document.getElementById('loc-input').value = 'Helsinki → Tallinna reitti';
   document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">⧗</span><br><br>Ladataan reittiennustetta…</div>';
 
-  // Fetch data for 3 key points: HKI, mid-gulf, TLN
+  // Fetch data for 4 key points: HKI, mid-gulf, Naissaari, TLN
   var points = [
     { name:'Helsinki / Harmaja', lat:60.1054, lon:24.9757 },
     { name:'Suomenlahti (keski)', lat:59.7500, lon:24.6000 },
+    { name:'Naissaari (Viro)', lat:59.5600, lon:24.5200 },
     { name:'Tallinna / Pirita', lat:59.4627, lon:24.8328 }
   ];
 
@@ -480,19 +481,16 @@ async function showRouteView(btn) {
       name:'Lähtö: Helsinki → Tallinna',
       date:'Pe 12.6.2026', dateKey:'2026-06-12',
       startH: 5, endH: 18,
-      from: points[0], to: points[2],
-      mid: points[1]
+      ptOrder: [0, 1, 2, 3]  // HKI → mid → Naissaari → TLN
     },
     {
       name:'Paluu: Tallinna → Helsinki',
       date:'Su 14.6.2026', dateKey:'2026-06-14',
       startH: 5, endH: 18,
-      from: points[2], to: points[0],
-      mid: points[1]
+      ptOrder: [3, 2, 1, 0]  // TLN → Naissaari → mid → HKI
     }
   ];
 
-  // fetch forecast for all 3 points (use ICON-D2 + MetNO for comparison)
   async function getPoint(la, lo) {
     var url = 'https://api.open-meteo.com/v1/forecast'
       + '?latitude=' + la + '&longitude=' + lo
@@ -510,8 +508,22 @@ async function showRouteView(btn) {
     return;
   }
 
-  // FMI live obs
+  // FMI live obs (Harmaja fmisid=100539)
   var fmiObs = await fetchFMIobs();
+
+  // EMHI (Viron ilmatieteen laitos) Naissaari obs via Open-Meteo current
+  async function fetchNaissaariObs() {
+    try {
+      var url = 'https://api.open-meteo.com/v1/forecast'
+        + '?latitude=59.5600&longitude=24.5200'
+        + '&current=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+        + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=1';
+      var r = await fetch(url);
+      var d = await r.json();
+      return d.current || null;
+    } catch(e) { return null; }
+  }
+  var naissaariObs = await fetchNaissaariObs();
 
   function getHours(data, dateKey, fromH, toH) {
     var H = data.hourly;
@@ -536,31 +548,30 @@ async function showRouteView(btn) {
     return rows;
   }
 
-  function renderLeg(leg, legData) {
-    var fromRows = getHours(legData[0], leg.dateKey, leg.startH, leg.endH);
-    var midRows  = getHours(legData[1], leg.dateKey, leg.startH, leg.endH);
-    var toRows   = getHours(legData[2], leg.dateKey, leg.startH, leg.endH);
+  function renderLeg(leg) {
+    // Build ordered point rows using ptOrder
+    var ptRows = leg.ptOrder.map(function(pi) {
+      return { name: points[pi].name, rows: getHours(results[pi], leg.dateKey, leg.startH, leg.endH) };
+    });
 
-    function worstSail(rows) {
+    function worstSail(rowsArr) {
       var worst = { s:100, lbl:'Kevyt', col:'#1a7a4a', bg:'#e6f4ec' };
-      rows.forEach(function(r) {
-        var si = sailCalc(r.ws, r.gust);
-        if (si.s < worst.s) worst = si;
+      rowsArr.forEach(function(pr) {
+        pr.rows.forEach(function(r) {
+          var si = sailCalc(r.ws, r.gust);
+          if (si.s < worst.s) worst = si;
+        });
       });
       return worst;
     }
 
-    var allRows = fromRows.concat(midRows).concat(toRows);
-    var overall = worstSail(allRows);
+    var overall = worstSail(ptRows);
 
-    function renderPoint(ptName, rows, collapseAfterFirst) {
+    function renderPoint(ptName, rows, sparse) {
       if (!rows.length) return '<div style="padding:10px 14px;color:var(--muted);font-size:13px">Ei dataa (' + ptName + ')</div>';
       var out = '<div class="route-waypoint"><span class="route-wp-dot"></span>' + ptName + '</div>';
-      rows.forEach(function(r, idx) {
-        if (collapseAfterFirst && idx > 0 && rows.length > 3) {
-          // show only every 2h for mid-point
-          if (r.hour % 2 !== 0) return;
-        }
+      rows.forEach(function(r) {
+        if (sparse && r.hour % 2 !== 0) return; // every 2h for mid-points
         var si = sailCalc(r.ws, r.gust);
         var hh = String(r.hour).padStart(2,'0') + ':00';
         out += '<div class="rhr">'
@@ -576,9 +587,12 @@ async function showRouteView(btn) {
       return out;
     }
 
-    var fromName = leg.name.indexOf('Tallinna →') > -1 ? 'Tallinna / Pirita' : 'Helsinki / Harmaja';
-    var midName  = 'Suomenlahti (keski)';
-    var toName   = leg.name.indexOf('Tallinna →') > -1 ? 'Helsinki / Harmaja' : 'Tallinna / Pirita';
+    var body = '';
+    ptRows.forEach(function(pr, idx) {
+      // first and last point full detail, middle points sparse
+      var isMid = (idx > 0 && idx < ptRows.length - 1);
+      body += renderPoint(pr.name, pr.rows, isMid);
+    });
 
     return '<div class="route-leg">'
       + '<div class="route-leg-head" onclick="toggleLeg(this)">'
@@ -588,46 +602,44 @@ async function showRouteView(btn) {
         + '</div>'
         + '<span class="route-leg-badge" style="color:' + overall.col + ';background:' + overall.bg + '">' + overall.lbl + '</span>'
       + '</div>'
-      + '<div class="route-hours">'
-        + renderPoint(fromName, fromRows, false)
-        + renderPoint(midName, midRows, true)
-        + renderPoint(toName, toRows, false)
-      + '</div>'
+      + '<div class="route-hours">' + body + '</div>'
     + '</div>';
   }
 
-  var legDataA = [results[0], results[1], results[2]]; // HKI→TLN
-  var legDataB = [results[2], results[1], results[0]]; // TLN→HKI
-
-  var fmiHtml = '';
-  if (fmiObs && !isNaN(fmiObs.windspeed)) {
-    var tStr = fmiObs.time ? fmiObs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) : '';
-    fmiHtml = '<div class="fmi-obs-card">'
-      + '<div class="fmi-obs-title"><span class="fmi-live"></span> FMI Harmaja – mitattu ' + tStr + '</div>'
+  // Build live obs HTML — Harmaja (FMI) + Naissaari (ICON current)
+  function obsCard(title, obs, isIcon) {
+    if (!obs) return '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">⚠️ ' + title + ' – ei saatavilla</div></div>';
+    var ws = isIcon ? obs.windspeed_10m : obs.windspeed;
+    var wg = isIcon ? obs.windgusts_10m : obs.windgust;
+    var wd = isIcon ? obs.winddirection_10m : obs.winddirection;
+    var tStr = '';
+    if (!isIcon && obs.time) tStr = ' – mitattu ' + obs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
+    if (isNaN(ws)) return '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">⚠️ ' + title + ' – ei saatavilla</div></div>';
+    return '<div class="fmi-obs-card">'
+      + '<div class="fmi-obs-title"><span class="fmi-live"></span> ' + title + tStr + '</div>'
       + '<div class="fmi-obs-grid">'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💨 Tuuli</div><div class="fmi-obs-v">' + (isNaN(fmiObs.windspeed)?'–':fmiObs.windspeed.toFixed(1)) + '<span class="fmi-obs-u"> m/s</span></div></div>'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💥 Puuska</div><div class="fmi-obs-v">' + (isNaN(fmiObs.windgust)?'–':fmiObs.windgust.toFixed(1)) + '<span class="fmi-obs-u"> m/s</span></div></div>'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">🧭 Suunta</div><div class="fmi-obs-v">' + (isNaN(fmiObs.winddirection)?'–':Math.round(fmiObs.winddirection)) + '<span class="fmi-obs-u">° ' + (isNaN(fmiObs.winddirection)?'':dirCard(fmiObs.winddirection)) + '</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💨 Tuuli</div><div class="fmi-obs-v">' + Number(ws).toFixed(1) + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💥 Puuska</div><div class="fmi-obs-v">' + (wg?Number(wg).toFixed(1):'–') + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">🧭 Suunta</div><div class="fmi-obs-v">' + (wd?Math.round(wd)+'<span class="fmi-obs-u">° '+dirCard(wd)+'</span>':'–') + '</div></div>'
       + '</div>'
     + '</div>';
-  } else {
-    fmiHtml = '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea">'
-      + '<div class="fmi-obs-title" style="color:var(--muted)">⚠️ FMI havaintodata ei saatavilla juuri nyt</div>'
-    + '</div>';
   }
+
+  var obsHtml = obsCard('FMI Harmaja (lähtöpiste)', fmiObs, false)
+              + obsCard('Naissaari – ICON nykyhetki', naissaariObs, true);
 
   document.getElementById('main-content').innerHTML =
     '<div class="route-header">'
       + '<div class="route-title">⛵ Helsinki – Tallinna reitti</div>'
-      + '<div class="route-sub">ICON-D2 ennuste · 12.6. lähtö &amp; 14.6. paluu · Klikkaa pistettä tunnille</div>'
+      + '<div class="route-sub">ICON-D2 ennuste · 12.6. lähtö &amp; 14.6. paluu · 4 pistettä</div>'
     + '</div>'
-    + fmiHtml
+    + obsHtml
     + '<div class="sec-label">Reittiennuste purjeittain</div>'
     + '<div class="route-legs">'
-      + renderLeg(legs[0], legDataA)
-      + renderLeg(legs[1], legDataB)
+      + renderLeg(legs[0])
+      + renderLeg(legs[1])
     + '</div>'
-    + '<div class="update-info">Lähde: ICON-D2 (Open-Meteo) · FMI WFS havainnot · ' + APP_VERSION + '</div>';
+    + '<div class="update-info">Lähde: ICON-D2 (Open-Meteo) · FMI WFS · ' + APP_VERSION + '</div>';
 }
 
 function toggleLeg(el) {
