@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.7</title>
+<title>Purjehdussää v1.8</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -28,12 +28,19 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .quick::-webkit-scrollbar { display: none; }
 .ql { padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: rgba(255,255,255,0.85); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .ql.active { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.6); }
+.ql.route-btn { background: rgba(255,200,0,0.18); border-color: rgba(255,200,0,0.5); color: #ffe066; }
+.ql.route-btn.active { background: rgba(255,200,0,0.32); border-color: #ffe066; }
 .model-tabs { display: flex; margin: 12px 16px 0; gap: 8px; }
-.mtab { flex: 1; padding: 10px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--card); cursor: pointer; text-align: center; }
+.mtab { flex: 1; padding: 9px 6px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--card); cursor: pointer; text-align: center; }
 .mtab.active { border-color: var(--ocean); background: #e8f0f9; }
-.mtab-title { font-size: 14px; font-weight: 600; color: var(--ocean); }
-.mtab-desc { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.mtab-title { font-size: 13px; font-weight: 600; color: var(--ocean); }
+.mtab-desc { font-size: 10px; color: var(--muted); margin-top: 1px; }
 .content { padding: 12px 16px 32px; }
+
+/* FMI badge */
+.fmi-badge { display: inline-flex; align-items: center; gap: 4px; background: #e8f0f9; border: 1px solid #b0c8e8; border-radius: 8px; padding: 3px 8px; font-size: 11px; font-weight: 600; color: var(--ocean); margin-bottom: 10px; }
+.fmi-live { width: 7px; height: 7px; border-radius: 50%; background: #1a7a4a; display: inline-block; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 /* NOW CARD */
 .now-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
@@ -70,7 +77,6 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .hc .hw { font-size: 13px; font-weight: 500; margin-top: 3px; }
 .hc .hd { font-size: 11px; color: var(--muted); }
 .hc .hsi { font-size: 11px; font-weight: 600; margin-top: 4px; padding: 2px 6px; border-radius: 10px; display: inline-block; }
-.hc .tap-hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
 /* DAILY */
 .daily-list { display: flex; flex-direction: column; gap: 6px; }
@@ -130,6 +136,43 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .dhr-wind { font-size: 14px; font-weight: 500; min-width: 64px; }
 .dhr-dir { font-size: 12px; color: var(--muted); min-width: 62px; display:inline-flex; align-items:center; gap:3px; }
 .dhr-sail { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
+
+/* ROUTE VIEW */
+.route-header { background: linear-gradient(135deg, #0a4272 0%, #1a6090 100%); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; color: #fff; }
+.route-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.route-sub { font-size: 12px; opacity: 0.75; }
+.route-legs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.route-leg { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+.route-leg-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.route-leg-name { font-size: 14px; font-weight: 600; }
+.route-leg-date { font-size: 12px; color: var(--muted); }
+.route-leg-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 10px; }
+.route-hours { padding: 8px 0; }
+.rhr { display: flex; align-items: center; padding: 8px 14px; gap: 9px; border-bottom: 1px solid var(--border); }
+.rhr:last-child { border-bottom: none; }
+.rhr-time { font-size: 13px; font-weight: 600; min-width: 42px; color: var(--ocean); }
+.rhr-wmo { font-size: 16px; flex: 0 0 22px; }
+.rhr-temp { font-size: 13px; min-width: 34px; }
+.rhr-wind { font-size: 13px; font-weight: 600; min-width: 58px; }
+.rhr-gust { font-size: 11px; color: var(--muted); min-width: 52px; }
+.rhr-dir { font-size: 12px; color: var(--muted); display:inline-flex; align-items:center; gap:2px; min-width: 60px; }
+.rhr-sail { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; margin-left: auto; white-space: nowrap; }
+.route-waypoint { display: flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 12px; color: var(--muted); background: #f8fafc; }
+.route-wp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ocean); flex-shrink: 0; }
+.fmi-obs-card { background: #e8f4ec; border: 1px solid #a0d4b0; border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px; }
+.fmi-obs-title { font-size: 12px; font-weight: 600; color: #1a7a4a; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.fmi-obs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.fmi-obs-stat { background: rgba(255,255,255,0.7); border-radius: 6px; padding: 7px 9px; }
+.fmi-obs-l { font-size: 10px; color: #3a6a4a; margin-bottom: 2px; }
+.fmi-obs-v { font-size: 15px; font-weight: 700; color: #1a3a2a; }
+.fmi-obs-u { font-size: 10px; color: #3a6a4a; font-weight: 400; }
+.src-compare { background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 12px; margin-top: 10px; }
+.src-compare-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.src-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.src-row:last-child { border-bottom: none; }
+.src-name { font-weight: 500; min-width: 110px; }
+.src-val { font-weight: 600; }
+.src-badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -141,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.7</span>
+  <span class="version">v1.8</span>
 </div>
 
 <div class="loc-bar">
@@ -152,22 +195,26 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 
 <div class="quick" id="quick-locs">
   <button class="ql active" onclick="setLoc('Suomenlinna',60.1469,24.9877,this)">Suomenlinna</button>
+  <button class="ql" onclick="setLoc('Harmaja',60.1054,24.9757,this)">Harmaja</button>
   <button class="ql" onclick="setLoc('Helsinki',60.1699,24.9384,this)">Helsinki</button>
   <button class="ql" onclick="setLoc('Hanko',59.8264,23.0010,this)">Hanko</button>
   <button class="ql" onclick="setLoc('Turku',60.4518,22.2666,this)">Turku</button>
-  <button class="ql" onclick="setLoc('Porvoo',60.3960,25.6628,this)">Porvoo</button>
-  <button class="ql" onclick="setLoc('Loviisa',60.4569,26.2270,this)">Loviisa</button>
-  <button class="ql" onclick="setLoc('Tammisaari',59.9744,23.4383,this)">Tammisaari</button>
+  <button class="ql" onclick="setLoc('Tallinna',59.4370,24.7536,this)">Tallinna</button>
+  <button class="ql route-btn" onclick="showRouteView(this)" id="btn-route">⛵ Hki–Tln reitti</button>
 </div>
 
-<div class="model-tabs">
+<div class="model-tabs" id="model-tabs-bar">
   <div class="mtab active" id="tab-icon" onclick="switchModel('icon')">
     <div class="mtab-title">ICON-D2</div>
-    <div class="mtab-desc">2 km · päivittyy 3 h</div>
+    <div class="mtab-desc">2 km · 3 h</div>
   </div>
   <div class="mtab" id="tab-ecmwf" onclick="switchModel('ecmwf')">
     <div class="mtab-title">ECMWF IFS</div>
-    <div class="mtab-desc">9 km · päivittyy 6 h</div>
+    <div class="mtab-desc">9 km · 6 h</div>
+  </div>
+  <div class="mtab" id="tab-fmi" onclick="switchModel('fmi')">
+    <div class="mtab-title">FMI Harmonie</div>
+    <div class="mtab-desc">2.5 km · 1 h</div>
   </div>
 </div>
 
@@ -190,23 +237,32 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.7';
+var APP_VERSION = 'v1.8';
 
-// ── Quartet-rajat ────────────────────────────────────────
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
 var WIND_STRONG      = 12;
 var WIND_VERY_STRONG = 16;
 var WIND_MAX_SHOW    = 25;
-// ────────────────────────────────────────────────────────
 
 var lat = 60.1469, lon = 24.9877, curModel = 'icon', locName = 'Suomenlinna';
 var cache = {};
 var lastData = null;
+var routeMode = false;
 
 var WI = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'🌦',53:'🌦',55:'🌧',61:'🌧',63:'🌧',65:'🌧',71:'🌨',73:'🌨',75:'❄️',80:'🌦',81:'🌧',82:'⛈',95:'⛈',96:'⛈',99:'⛈'};
-var WD = {0:'Selkeää',1:'Pääosin selkeää',2:'Puolipilvistä',3:'Pilvistä',45:'Sumuinen',48:'Sumuinen',51:'Tihkusadetta',53:'Tihkusadetta',55:'Tihkusadetta',61:'Sadetta',63:'Sadetta',65:'Kovaa sadetta',71:'Lumisadetta',73:'Lumisadetta',75:'Kovaa lunta',80:'Sadekuuroja',81:'Sadekuuroja',82:'Raekuuroja',95:'⛈ Ukkosmyrsky',96:'⛈ Ukkosmyrsky',99:'⛈ Ukkosmyrsky'};
+var WD = {0:'Selkeää',1:'Pääosin selkeää',2:'Puolipilvistä',3:'Pilvistä',45:'Sumuinen',48:'Sumuinen',51:'Tihkusadetta',53:'Tihkusadetta',55:'Tihkusadetta',61:'Sadetta',63:'Sadetta',65:'Kovaa sadetta',71:'Lumisadetta',73:'Lumisadetta',75:'Kovaa lunta',80:'Sadekuuroja',81:'Sadekuuroja',82:'Raekuuroja',95:'Ukkosmyrsky',96:'Ukkosmyrsky',99:'Ukkosmyrsky'};
 var DNS = ['Su','Ma','Ti','Ke','To','Pe','La'];
+
+// Reittivaihepisteet Helsinki–Tallinna (koordinaatit)
+var ROUTE_WAYPOINTS = [
+  { name:'Helsinki / Suomenlinna', lat:60.1469, lon:24.9877, port:'hki' },
+  { name:'Harmaja (FMI-asema)', lat:60.1054, lon:24.9757, port:'hki' },
+  { name:'Porkkala', lat:59.9841, lon:24.3979, port:'mid' },
+  { name:'Suomenlahden keskiosa', lat:59.7500, lon:24.6000, port:'mid' },
+  { name:'Naissaari', lat:59.5600, lon:24.5200, port:'tln' },
+  { name:'Tallinna / Pirita', lat:59.4627, lon:24.8328, port:'tln' }
+];
 
 function dirCard(d) { return ['P','KP','K','KE','E','KA','L','LP'][Math.round(d/45)%8]; }
 function dirArrow(deg, size) {
@@ -248,7 +304,9 @@ function sailCalc(ws, gust) {
 function windBarPct(v) { return (v / WIND_MAX_SHOW * 100).toFixed(1) + '%'; }
 function windBarPos(ws) { return Math.min(Math.max(ws / WIND_MAX_SHOW * 100, 0), 100).toFixed(1) + '%'; }
 
+// ── URL BUILDERS ─────────────────────────────────────────
 function buildURL(la, lo, m) {
+  if (m === 'fmi') return buildFMIUrl(la, lo);
   var mdl = m === 'icon' ? 'icon_seamless' : 'ecmwf_ifs025';
   return 'https://api.open-meteo.com/v1/forecast'
     + '?latitude=' + la + '&longitude=' + lo
@@ -257,7 +315,55 @@ function buildURL(la, lo, m) {
     + '&current_weather=true&windspeed_unit=ms&timezone=auto&models=' + mdl + '&forecast_days=7';
 }
 
-// ── MODAL ────────────────────────────────────────────────
+function buildFMIUrl(la, lo) {
+  // FMI Harmonie forecast via open-meteo FMI model
+  return 'https://api.open-meteo.com/v1/forecast'
+    + '?latitude=' + la + '&longitude=' + lo
+    + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+    + '&daily=weathercode,temperature_2m_max,temperature_2m_min,windspeed_10m_max,winddirection_10m_dominant,windgusts_10m_max'
+    + '&current_weather=true&windspeed_unit=ms&timezone=auto&models=metno_nordic&forecast_days=7';
+}
+
+// FMI observations WFS
+function buildFMIObsUrl(stationFmisid) {
+  var now = new Date();
+  var start = new Date(now.getTime() - 2 * 3600000);
+  function fmt(d) { return d.toISOString().replace('.000Z','Z'); }
+  return 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::observations::weather::timevaluepair'
+    + '&fmisid=' + stationFmisid
+    + '&parameters=windspeedms,winddirection,windgust,temperature'
+    + '&starttime=' + fmt(start)
+    + '&endtime=' + fmt(now)
+    + '&maxlocations=1';
+}
+
+// Parse FMI WFS XML observation response
+function parseFMIobs(xmlText) {
+  try {
+    var parser = new DOMParser();
+    var xml = parser.parseFromString(xmlText, 'text/xml');
+    var members = xml.querySelectorAll('MeasurementTimeseries');
+    var result = {};
+    members.forEach(function(ts) {
+      var obsType = ts.getAttribute('gml:id') || '';
+      var points = ts.querySelectorAll('MeasurementTVP');
+      if (!points.length) return;
+      var last = points[points.length - 1];
+      var timeEl = last.querySelector('time');
+      var valEl  = last.querySelector('value');
+      var val = valEl ? parseFloat(valEl.textContent) : NaN;
+      if (obsType.indexOf('windspeedms') > -1 || obsType.indexOf('wind_speed') > -1) result.windspeed = val;
+      else if (obsType.indexOf('winddirection') > -1 || obsType.indexOf('wind_direction') > -1) result.winddirection = val;
+      else if (obsType.indexOf('windgust') > -1 || obsType.indexOf('gust') > -1) result.windgust = val;
+      else if (obsType.indexOf('temperature') > -1 || obsType.indexOf('temp') > -1) result.temperature = val;
+      if (timeEl && !result.time) result.time = new Date(timeEl.textContent);
+    });
+    return result;
+  } catch(e) { return null; }
+}
+
+// ── MODAL ─────────────────────────────────────────────────
 function openModal(title, bodyHTML) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHTML;
@@ -272,7 +378,6 @@ function closeModal(e) {
   if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
 }
 
-// ── TUNTI-DETAIL ─────────────────────────────────────────
 function showHourDetail(idx) {
   if (!lastData) return;
   var H = lastData.hourly;
@@ -304,7 +409,6 @@ function showHourDetail(idx) {
   openModal(timeStr, html);
 }
 
-// ── PÄIVÄ-TUNTIENNUSTE ───────────────────────────────────
 function showDayHours(dayIdx) {
   if (!lastData) return;
   var H = lastData.hourly;
@@ -314,7 +418,6 @@ function showDayHours(dayIdx) {
   var dn = dayIdx===0?'Tänään':dayIdx===1?'Huomenna':DNS[d.getDay()]+' '+d.getDate()+'.';
   var title = dn + ' – tuntiennuste';
 
-  // etsi tunnit 06:00–22:00 kyseiselle päivälle
   var html = '<div class="day-hours">';
   var found = false;
   for (var i = 0; i < H.time.length; i++) {
@@ -345,7 +448,194 @@ function showDayHours(dayIdx) {
   openModal(title, html);
 }
 
-// ── RENDER ───────────────────────────────────────────────
+// ── FMI OBSERVATION FETCH ─────────────────────────────────
+// Harmajan FMI-asema fmisid = 100539
+async function fetchFMIobs() {
+  try {
+    var url = buildFMIObsUrl('100539');
+    var r = await fetch(url);
+    if (!r.ok) return null;
+    var xml = await r.text();
+    return parseFMIobs(xml);
+  } catch(e) { return null; }
+}
+
+// ── ROUTE VIEW ────────────────────────────────────────────
+async function showRouteView(btn) {
+  routeMode = true;
+  document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('loc-input').value = 'Helsinki → Tallinna reitti';
+  document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">⧗</span><br><br>Ladataan reittiennustetta…</div>';
+
+  // Fetch data for 3 key points: HKI, mid-gulf, TLN
+  var points = [
+    { name:'Helsinki / Harmaja', lat:60.1054, lon:24.9757 },
+    { name:'Suomenlahti (keski)', lat:59.7500, lon:24.6000 },
+    { name:'Tallinna / Pirita', lat:59.4627, lon:24.8328 }
+  ];
+
+  var legs = [
+    { 
+      name:'Lähtö: Helsinki → Tallinna',
+      date:'Pe 12.6.2026', dateKey:'2026-06-12',
+      startH: 5, endH: 18,
+      from: points[0], to: points[2],
+      mid: points[1]
+    },
+    {
+      name:'Paluu: Tallinna → Helsinki',
+      date:'Su 14.6.2026', dateKey:'2026-06-14',
+      startH: 5, endH: 18,
+      from: points[2], to: points[0],
+      mid: points[1]
+    }
+  ];
+
+  // fetch forecast for all 3 points (use ICON-D2 + MetNO for comparison)
+  async function getPoint(la, lo) {
+    var url = 'https://api.open-meteo.com/v1/forecast'
+      + '?latitude=' + la + '&longitude=' + lo
+      + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+      + '&current_weather=true&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
+    var r = await fetch(url);
+    return await r.json();
+  }
+
+  var results;
+  try {
+    results = await Promise.all(points.map(function(p){ return getPoint(p.lat, p.lon); }));
+  } catch(e) {
+    document.getElementById('main-content').innerHTML = '<div class="err">Lataus epäonnistui<br><small>' + e.message + '</small><br><button class="retry-btn" onclick="showRouteView(null)">↻ Yritä uudelleen</button></div>';
+    return;
+  }
+
+  // FMI live obs
+  var fmiObs = await fetchFMIobs();
+
+  function getHours(data, dateKey, fromH, toH) {
+    var H = data.hourly;
+    var rows = [];
+    for (var i = 0; i < H.time.length; i++) {
+      var t = new Date(H.time[i]);
+      // Compare date in Helsinki time
+      var y = t.getFullYear(), mo = String(t.getMonth()+1).padStart(2,'0'), dd = String(t.getDate()).padStart(2,'0');
+      var tDate = y + '-' + mo + '-' + dd;
+      var tHour = t.getHours();
+      if (tDate === dateKey && tHour >= fromH && tHour <= toH) {
+        rows.push({
+          hour: tHour,
+          ws: Math.round(H.windspeed_10m[i]),
+          wd: H.winddirection_10m[i],
+          gust: Math.round(H.windgusts_10m[i] || H.windspeed_10m[i]),
+          temp: Math.round(H.temperature_2m[i]),
+          wc: H.weathercode[i]
+        });
+      }
+    }
+    return rows;
+  }
+
+  function renderLeg(leg, legData) {
+    var fromRows = getHours(legData[0], leg.dateKey, leg.startH, leg.endH);
+    var midRows  = getHours(legData[1], leg.dateKey, leg.startH, leg.endH);
+    var toRows   = getHours(legData[2], leg.dateKey, leg.startH, leg.endH);
+
+    function worstSail(rows) {
+      var worst = { s:100, lbl:'Kevyt', col:'#1a7a4a', bg:'#e6f4ec' };
+      rows.forEach(function(r) {
+        var si = sailCalc(r.ws, r.gust);
+        if (si.s < worst.s) worst = si;
+      });
+      return worst;
+    }
+
+    var allRows = fromRows.concat(midRows).concat(toRows);
+    var overall = worstSail(allRows);
+
+    function renderPoint(ptName, rows, collapseAfterFirst) {
+      if (!rows.length) return '<div style="padding:10px 14px;color:var(--muted);font-size:13px">Ei dataa (' + ptName + ')</div>';
+      var out = '<div class="route-waypoint"><span class="route-wp-dot"></span>' + ptName + '</div>';
+      rows.forEach(function(r, idx) {
+        if (collapseAfterFirst && idx > 0 && rows.length > 3) {
+          // show only every 2h for mid-point
+          if (r.hour % 2 !== 0) return;
+        }
+        var si = sailCalc(r.ws, r.gust);
+        var hh = String(r.hour).padStart(2,'0') + ':00';
+        out += '<div class="rhr">'
+          + '<span class="rhr-time">' + hh + '</span>'
+          + '<span class="rhr-wmo">' + (WI[r.wc]||'🌡') + '</span>'
+          + '<span class="rhr-temp">' + r.temp + '°</span>'
+          + '<span class="rhr-wind">' + r.ws + ' m/s</span>'
+          + '<span class="rhr-gust">↑' + r.gust + ' m/s</span>'
+          + '<span class="rhr-dir">' + dirArrow(r.wd, 14) + ' ' + Math.round(r.wd) + '° ' + dirCard(r.wd) + '</span>'
+          + '<span class="rhr-sail" style="color:' + si.col + ';background:' + si.bg + '">' + si.lbl.replace(' ⭐','⭐').replace(' ⚡','⚡') + '</span>'
+          + '</div>';
+      });
+      return out;
+    }
+
+    var fromName = leg.name.indexOf('Tallinna →') > -1 ? 'Tallinna / Pirita' : 'Helsinki / Harmaja';
+    var midName  = 'Suomenlahti (keski)';
+    var toName   = leg.name.indexOf('Tallinna →') > -1 ? 'Helsinki / Harmaja' : 'Tallinna / Pirita';
+
+    return '<div class="route-leg">'
+      + '<div class="route-leg-head" onclick="toggleLeg(this)">'
+        + '<div>'
+          + '<div class="route-leg-name">' + leg.name + '</div>'
+          + '<div class="route-leg-date">' + leg.date + ' · klo 05–18</div>'
+        + '</div>'
+        + '<span class="route-leg-badge" style="color:' + overall.col + ';background:' + overall.bg + '">' + overall.lbl + '</span>'
+      + '</div>'
+      + '<div class="route-hours">'
+        + renderPoint(fromName, fromRows, false)
+        + renderPoint(midName, midRows, true)
+        + renderPoint(toName, toRows, false)
+      + '</div>'
+    + '</div>';
+  }
+
+  var legDataA = [results[0], results[1], results[2]]; // HKI→TLN
+  var legDataB = [results[2], results[1], results[0]]; // TLN→HKI
+
+  var fmiHtml = '';
+  if (fmiObs && !isNaN(fmiObs.windspeed)) {
+    var tStr = fmiObs.time ? fmiObs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) : '';
+    fmiHtml = '<div class="fmi-obs-card">'
+      + '<div class="fmi-obs-title"><span class="fmi-live"></span> FMI Harmaja – mitattu ' + tStr + '</div>'
+      + '<div class="fmi-obs-grid">'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💨 Tuuli</div><div class="fmi-obs-v">' + (isNaN(fmiObs.windspeed)?'–':fmiObs.windspeed.toFixed(1)) + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💥 Puuska</div><div class="fmi-obs-v">' + (isNaN(fmiObs.windgust)?'–':fmiObs.windgust.toFixed(1)) + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">🧭 Suunta</div><div class="fmi-obs-v">' + (isNaN(fmiObs.winddirection)?'–':Math.round(fmiObs.winddirection)) + '<span class="fmi-obs-u">° ' + (isNaN(fmiObs.winddirection)?'':dirCard(fmiObs.winddirection)) + '</span></div></div>'
+      + '</div>'
+    + '</div>';
+  } else {
+    fmiHtml = '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea">'
+      + '<div class="fmi-obs-title" style="color:var(--muted)">⚠️ FMI havaintodata ei saatavilla juuri nyt</div>'
+    + '</div>';
+  }
+
+  document.getElementById('main-content').innerHTML =
+    '<div class="route-header">'
+      + '<div class="route-title">⛵ Helsinki – Tallinna reitti</div>'
+      + '<div class="route-sub">ICON-D2 ennuste · 12.6. lähtö &amp; 14.6. paluu · Klikkaa pistettä tunnille</div>'
+    + '</div>'
+    + fmiHtml
+    + '<div class="sec-label">Reittiennuste purjeittain</div>'
+    + '<div class="route-legs">'
+      + renderLeg(legs[0], legDataA)
+      + renderLeg(legs[1], legDataB)
+    + '</div>'
+    + '<div class="update-info">Lähde: ICON-D2 (Open-Meteo) · FMI WFS havainnot · ' + APP_VERSION + '</div>';
+}
+
+function toggleLeg(el) {
+  var hours = el.nextElementSibling;
+  hours.style.display = hours.style.display === 'none' ? '' : 'none';
+}
+
+// ── RENDER (normaali näkymä) ──────────────────────────────
 function render(data) {
   lastData = data;
   var cw = data.current_weather;
@@ -358,7 +648,6 @@ function render(data) {
     if (new Date(H.time[i]) >= now) { ci = i; break; }
   }
 
-  // Tuntiennuste
   var hrs = '';
   for (var i = ci; i < Math.min(ci + 24, H.time.length); i++) {
     var t = new Date(H.time[i]);
@@ -380,7 +669,6 @@ function render(data) {
       + '</div>';
   }
 
-  // 7 vrk ennuste
   var days = '';
   for (var i = 0; i < Math.min(D.time.length, 7); i++) {
     var dd = new Date(D.time[i]);
@@ -403,7 +691,6 @@ function render(data) {
       + '</div>';
   }
 
-  // Tuulibaari
   var barHTML = '<div class="wind-bar-wrap">'
     + '<div class="wind-bar-labels">'
     + '<span>0</span><span>' + WIND_IDEAL_MIN + '</span><span>' + WIND_STRONG + '</span><span>' + WIND_VERY_STRONG + '</span><span>' + WIND_MAX_SHOW + '+</span>'
@@ -416,10 +703,18 @@ function render(data) {
     + '<div class="wind-marker" style="left:' + windBarPos(cw.windspeed) + '"></div>'
     + '</div></div>';
 
-  var mdlTag = curModel==='icon' ? 'ICON-D2 (2 km · ≤3 h vanha)' : 'ECMWF IFS (9 km · ≤6 h vanha)';
+  var mdlTag = curModel==='icon' ? 'ICON-D2 (2 km)' 
+             : curModel==='ecmwf' ? 'ECMWF IFS (9 km)' 
+             : 'MetNO Nordic/FMI (2.5 km)';
+
+  // FMI badge on FMI-tab
+  var fmiBadge = curModel==='fmi'
+    ? '<div class="fmi-badge"><span class="fmi-live"></span> FMI Harmonie / MetNO Nordic · Suomen paikallisin ennuste</div>'
+    : '';
 
   document.getElementById('main-content').innerHTML =
-    '<div class="now-card">'
+    fmiBadge
+    + '<div class="now-card">'
       + '<div class="now-top">'
         + '<div class="now-left">'
           + '<div class="loc">📍 ' + locName + '</div>'
@@ -456,6 +751,7 @@ function render(data) {
 }
 
 async function load() {
+  routeMode = false;
   var key = curModel + '_' + lat.toFixed(3) + '_' + lon.toFixed(3);
   if (cache[key]) { render(cache[key]); return; }
   document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">⧗</span><br><br>Ladataan ennustetta…</div>';
@@ -477,10 +773,15 @@ function switchModel(m) {
   curModel = m;
   document.getElementById('tab-icon').classList.toggle('active', m==='icon');
   document.getElementById('tab-ecmwf').classList.toggle('active', m==='ecmwf');
+  document.getElementById('tab-fmi').classList.toggle('active', m==='fmi');
+  document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
+  if (m === 'icon') document.querySelector('.ql').classList.add('active');
+  cache = {};
   load();
 }
 
 function setLoc(name, la, lo, btn) {
+  routeMode = false;
   lat=la; lon=lo; locName=name;
   document.getElementById('loc-input').value = name;
   document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
@@ -531,6 +832,8 @@ window.closeModal = closeModal;
 window.closeModalDirect = closeModalDirect;
 window.showHourDetail = showHourDetail;
 window.showDayHours = showDayHours;
+window.showRouteView = showRouteView;
+window.toggleLeg = toggleLeg;
 
 document.getElementById('loc-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchLoc(); });
 
