@@ -400,6 +400,12 @@ function fetchGPS() {
   }, function() { alert('GPS-lupa puuttuu.'); });
 }
 
+window.switchModel = switchModel;
+window.setLoc = setLoc;
+window.searchLoc = searchLoc;
+window.fetchGPS = fetchGPS;
+window.load = load;
+
 document.getElementById('loc-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchLoc(); });
 
 load();
