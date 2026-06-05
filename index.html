@@ -3,62 +3,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.2</title>
+<title>Purjehdussää v1.3</title>
 <meta name="theme-color" content="#0a4272">
-<link rel="manifest" href="manifest.json">
 <style>
 :root {
-  --ocean: #0a4272;
-  --gold: #b87c1a;
-  --green: #1a7a4a;
-  --orange: #c45c00;
-  --red: #b82222;
-  --bg: #f4f6f9;
-  --card: #ffffff;
-  --text: #1a2533;
-  --muted: #6b7a8d;
-  --border: #dde2ea;
-  --radius: 12px;
-  --radius-sm: 8px;
+  --ocean: #0a4272; --gold: #b87c1a; --green: #1a7a4a;
+  --orange: #c45c00; --red: #b82222;
+  --bg: #f4f6f9; --card: #ffffff; --text: #1a2533;
+  --muted: #6b7a8d; --border: #dde2ea;
+  --radius: 12px; --radius-sm: 8px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { background: var(--bg); color: var(--text); font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif; min-height: 100vh; }
+html, body { background: var(--bg); color: var(--text); font-family: -apple-system,'SF Pro Text','Helvetica Neue',Arial,sans-serif; min-height: 100vh; }
 
-/* HEADER */
 .top-bar { background: var(--ocean); color: #fff; padding: 14px 16px 12px; display: flex; align-items: center; justify-content: space-between; }
 .top-bar h1 { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-.top-bar h1 svg { opacity: 0.9; }
 .version { font-size: 11px; opacity: 0.6; }
-
-/* LOC BAR */
 .loc-bar { background: var(--ocean); padding: 0 16px 14px; display: flex; gap: 8px; }
 .loc-bar input { flex: 1; padding: 9px 12px; border-radius: var(--radius-sm); border: none; font-size: 15px; background: rgba(255,255,255,0.15); color: #fff; }
 .loc-bar input::placeholder { color: rgba(255,255,255,0.55); }
 .loc-bar input:focus { outline: none; background: rgba(255,255,255,0.25); }
 .loc-bar button { padding: 9px 14px; border-radius: var(--radius-sm); border: none; background: rgba(255,255,255,0.2); color: #fff; font-size: 14px; cursor: pointer; white-space: nowrap; }
-.loc-bar button:active { background: rgba(255,255,255,0.3); }
-
-/* QUICK LOCS */
 .quick { background: var(--ocean); padding: 0 16px 14px; display: flex; gap: 6px; overflow-x: auto; }
 .quick::-webkit-scrollbar { display: none; }
 .ql { padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.3); background: transparent; color: rgba(255,255,255,0.85); font-size: 13px; cursor: pointer; white-space: nowrap; }
-.ql:active, .ql.active { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.6); }
-
-/* MODEL TABS */
+.ql.active { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.6); }
 .model-tabs { display: flex; margin: 12px 16px 0; gap: 8px; }
 .mtab { flex: 1; padding: 10px 8px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--card); cursor: pointer; text-align: center; }
 .mtab.active { border-color: var(--ocean); background: #e8f0f9; }
 .mtab-title { font-size: 14px; font-weight: 600; color: var(--ocean); }
 .mtab-desc { font-size: 11px; color: var(--muted); margin-top: 1px; }
-
-/* CONTENT */
 .content { padding: 12px 16px 32px; }
 
 /* NOW CARD */
 .now-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
 .now-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
 .now-left .loc { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-.now-temp { font-size: 46px; font-weight: 300; color: var(--text); line-height: 1; }
+.now-temp { font-size: 46px; font-weight: 300; line-height: 1; }
 .now-desc { font-size: 14px; color: var(--muted); margin-top: 6px; }
 .sail-box { text-align: right; }
 .sail-score { font-size: 42px; font-weight: 300; line-height: 1; }
@@ -67,59 +48,88 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .now-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .nstat { background: var(--bg); border-radius: var(--radius-sm); padding: 10px; }
 .nstat-l { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
-.nstat-v { font-size: 16px; font-weight: 600; color: var(--text); }
+.nstat-v { font-size: 16px; font-weight: 600; }
 .nstat-u { font-size: 11px; color: var(--muted); font-weight: 400; }
-
-/* WIND BAR */
 .wind-bar-wrap { margin-top: 14px; }
 .wind-bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-.wind-bar { height: 8px; border-radius: 4px; background: linear-gradient(to right, #1a7a4a 0%, #1a7a4a 31%, #b87c1a 31%, #b87c1a 50%, #c45c00 50%, #c45c00 65%, #b82222 65%, #b82222 100%); position: relative; }
+.wind-bar { height: 8px; border-radius: 4px; position: relative; }
 .wind-marker { position: absolute; top: -3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ocean); border: 2px solid #fff; transform: translateX(-50%); box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: left 0.4s ease; }
 
-/* SECTION */
 .sec-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin: 16px 0 8px; }
 
 /* HOURLY */
 .hourly-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px 8px; }
 .hourly-scroll::-webkit-scrollbar { display: none; }
 .hourly-row { display: flex; gap: 8px; min-width: max-content; }
-.hc { background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 10px 10px; text-align: center; min-width: 70px; }
+.hc { background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 10px; text-align: center; min-width: 70px; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; }
+.hc:active { transform: scale(0.96); }
 .hc.hl { border-color: var(--ocean); border-width: 2px; }
 .hc .ht { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
 .hc .hwmo { font-size: 18px; line-height: 1; }
-.hc .htemp { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 3px; }
-.hc .hw { font-size: 13px; color: var(--text); font-weight: 500; margin-top: 3px; }
+.hc .htemp { font-size: 14px; font-weight: 600; margin-top: 3px; }
+.hc .hw { font-size: 13px; font-weight: 500; margin-top: 3px; }
 .hc .hd { font-size: 11px; color: var(--muted); }
 .hc .hsi { font-size: 11px; font-weight: 600; margin-top: 4px; padding: 2px 6px; border-radius: 10px; display: inline-block; }
+.hc .tap-hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
 /* DAILY */
 .daily-list { display: flex; flex-direction: column; gap: 6px; }
-.dr { display: flex; align-items: center; background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 11px 12px; gap: 10px; }
-.dn { font-size: 14px; font-weight: 500; min-width: 38px; }
+.dr { display: flex; align-items: center; background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 11px 12px; gap: 10px; cursor: pointer; transition: background 0.1s; }
+.dr:active { background: #f0f4f8; }
+.dn { font-size: 14px; font-weight: 500; min-width: 60px; }
 .di { font-size: 20px; flex: 0 0 26px; text-align: center; }
 .dt { flex: 1; font-size: 14px; }
 .dt-min { color: var(--muted); font-size: 13px; }
-.dw { font-size: 13px; color: var(--muted); text-align: right; min-width: 88px; }
+.dw { font-size: 13px; color: var(--muted); text-align: right; min-width: 80px; }
 .dsail { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+.dr-chevron { color: var(--muted); font-size: 16px; margin-left: 4px; }
 
 /* LEGEND */
 .legend { background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 12px 14px; margin-top: 16px; }
 .legend-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
 .legend-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; }
-.legend-name { font-weight: 500; min-width: 110px; }
+.legend-name { font-weight: 500; min-width: 120px; }
 .legend-range { color: var(--muted); font-size: 12px; }
 
-/* GPS BTN */
 .gps-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; font-size: 13px; }
-
-/* LOADING / ERR */
 .loading { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 15px; }
 .spin { display: inline-block; animation: spin 1s linear infinite; font-size: 24px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .err { background: #fff0f0; border: 1px solid #f5c0c0; border-radius: var(--radius-sm); padding: 16px; text-align: center; color: #9b2020; font-size: 14px; }
 .retry-btn { margin-top: 12px; padding: 8px 20px; border-radius: var(--radius-sm); border: 1px solid #f5c0c0; background: transparent; color: #9b2020; cursor: pointer; font-size: 14px; }
 .update-info { font-size: 11px; color: var(--muted); text-align: center; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(10,30,50,0.55); z-index: 100; align-items: flex-end; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--card); border-radius: var(--radius) var(--radius) 0 0; width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; padding: 0 0 32px; }
+.modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 0; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close { font-size: 22px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0 4px; line-height: 1; }
+.modal-body { padding: 16px; }
+
+/* HOUR DETAIL */
+.hd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.hd-stat { background: var(--bg); border-radius: var(--radius-sm); padding: 12px; }
+.hd-stat-l { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.hd-stat-v { font-size: 20px; font-weight: 600; }
+.hd-stat-u { font-size: 12px; color: var(--muted); font-weight: 400; }
+.sail-detail-box { border-radius: var(--radius-sm); padding: 14px; text-align: center; margin-bottom: 16px; }
+.sail-detail-score { font-size: 52px; font-weight: 300; line-height: 1; }
+.sail-detail-name { font-size: 16px; font-weight: 600; margin-top: 4px; }
+.sail-detail-desc { font-size: 13px; margin-top: 6px; opacity: 0.8; }
+
+/* DAY HOURLY IN MODAL */
+.day-hours { display: flex; flex-direction: column; gap: 6px; }
+.dhr { display: flex; align-items: center; background: var(--bg); border-radius: var(--radius-sm); padding: 10px 12px; gap: 10px; }
+.dhr-time { font-size: 14px; font-weight: 500; min-width: 44px; }
+.dhr-wmo { font-size: 18px; flex: 0 0 24px; text-align: center; }
+.dhr-temp { font-size: 14px; min-width: 38px; }
+.dhr-wind { font-size: 14px; font-weight: 500; min-width: 64px; }
+.dhr-dir { font-size: 12px; color: var(--muted); min-width: 28px; }
+.dhr-sail { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -131,7 +141,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.2</span>
+  <span class="version">v1.3</span>
 </div>
 
 <div class="loc-bar">
@@ -167,52 +177,71 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
   </div>
 </div>
 
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title"></span>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
 <script>
-// ── Quartet-kohtaiset rajat ──────────────────────────────
-var WIND_IDEAL_MIN = 5;   // m/s paras alaraja
-var WIND_IDEAL_MAX = 8;   // m/s paras yläraja
-var WIND_STRONG    = 12;  // m/s kova alkaa
-var WIND_VERY_STRONG = 16; // m/s erittäin kova alkaa
-var WIND_MAX_SHOW  = 25;  // visuaalinen maksimi baarille
+var APP_VERSION = 'v1.3';
+
+// ── Quartet-rajat ────────────────────────────────────────
+var WIND_IDEAL_MIN   = 5;
+var WIND_IDEAL_MAX   = 8;
+var WIND_STRONG      = 12;
+var WIND_VERY_STRONG = 16;
+var WIND_MAX_SHOW    = 25;
 // ────────────────────────────────────────────────────────
 
-var lat = 60.1469, lon = 24.9877;
-var curModel = 'icon';
-var locName = 'Suomenlinna';
+var lat = 60.1469, lon = 24.9877, curModel = 'icon', locName = 'Suomenlinna';
 var cache = {};
+var lastData = null;
 
 var WI = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'🌦',53:'🌦',55:'🌧',61:'🌧',63:'🌧',65:'🌧',71:'🌨',73:'🌨',75:'❄️',80:'🌦',81:'🌧',82:'⛈',95:'⛈',96:'⛈',99:'⛈'};
-var WD = {0:'Selkeää',1:'Pääosin selkeää',2:'Puolipilvistä',3:'Pilvistä',45:'Sumuinen',48:'Sumuinen',51:'Tihkusadetta',53:'Tihkusadetta',55:'Tihkusadetta',61:'Sadetta',63:'Sadetta',65:'Kovaa sadetta',71:'Lumisadetta',73:'Lumisadetta',75:'Kovaa lunta',80:'Sadekuuroja',81:'Sadekuuroja',82:'Raekuuroja',95:'Ukkosmyrsky',96:'Ukkosmyrsky',99:'Ukkosmyrsky'};
+var WD = {0:'Selkeää',1:'Pääosin selkeää',2:'Puolipilvistä',3:'Pilvistä',45:'Sumuinen',48:'Sumuinen',51:'Tihkusadetta',53:'Tihkusadetta',55:'Tihkusadetta',61:'Sadetta',63:'Sadetta',65:'Kovaa sadetta',71:'Lumisadetta',73:'Lumisadetta',75:'Kovaa lunta',80:'Sadekuuroja',81:'Sadekuuroja',82:'Raekuuroja',95:'⛈ Ukkosmyrsky',96:'⛈ Ukkosmyrsky',99:'⛈ Ukkosmyrsky'};
 var DNS = ['Su','Ma','Ti','Ke','To','Pe','La'];
 
-function dirCard(d){ return ['P','KP','K','KE','E','KA','L','LP'][Math.round(d/45)%8]; }
+function dirCard(d) { return ['P','KP','K','KE','E','KA','L','LP'][Math.round(d/45)%8]; }
 
-// ── Purjeluindeksi Quartet-rajoilla ─────────────────────
 function sailCalc(ws, gust) {
   ws = ws || 0;
-  var s, lbl, col, bg;
+  var s, lbl, col, bg, desc;
   if (ws < 3) {
-    s = 15; lbl = 'Tyyni'; col = '#6b7a8d'; bg = '#eef0f3';
+    s=15; lbl='Tyyni'; col='#6b7a8d'; bg='#eef0f3';
+    desc='Tuuli liian heikko purjehtimiseen.';
   } else if (ws < WIND_IDEAL_MIN) {
-    s = 55; lbl = 'Kevyt'; col = '#1a7a4a'; bg = '#e6f4ec';
+    s=55; lbl='Kevyt'; col='#1a7a4a'; bg='#e6f4ec';
+    desc='Kevyt tuuli, purjehtiminen onnistuu mutta hidas.';
   } else if (ws <= WIND_IDEAL_MAX) {
-    s = 95; lbl = 'Paras keli ⭐'; col = '#0a4272'; bg = '#e0ecf9';
+    s=95; lbl='Paras keli ⭐'; col='#0a4272'; bg='#deeaf9';
+    desc='Ihanteellinen tuuli Quartetille – ' + WIND_IDEAL_MIN + '–' + WIND_IDEAL_MAX + ' m/s.';
   } else if (ws < WIND_STRONG) {
-    s = 75; lbl = 'Hyvä'; col = '#1a7a4a'; bg = '#e6f4ec';
+    s=75; lbl='Hyvä'; col='#1a7a4a'; bg='#e6f4ec';
+    desc='Hyvät purjehdusolosuhteet, pieni reivaus voi olla tarpeen.';
   } else if (ws < WIND_VERY_STRONG) {
-    s = 45; lbl = 'Kova tuuli'; col = '#c45c00'; bg = '#fdf0e4';
+    s=45; lbl='Kova tuuli'; col='#c45c00'; bg='#fdf0e4';
+    desc='Kova tuuli yli ' + WIND_STRONG + ' m/s. Reivaus suositeltavaa.';
   } else {
-    s = 15; lbl = 'Erittäin kova'; col = '#b82222'; bg = '#fdf0f0';
+    s=15; lbl='Erittäin kova'; col='#b82222'; bg='#fdf0f0';
+    desc='Erittäin kova tuuli yli ' + WIND_VERY_STRONG + ' m/s. Ei suositella purjehtimista.';
   }
-  if (gust && gust - ws > 7) { s = Math.max(s - 20, 10); lbl += ' ⚡'; }
-  return { s:s, lbl:lbl, col:col, bg:bg };
-}
-
-function windBarPos(ws) {
-  return Math.min(Math.max(ws / WIND_MAX_SHOW * 100, 0), 100).toFixed(1) + '%';
+  if (gust && gust - ws > 7) {
+    s = Math.max(s - 20, 10);
+    lbl += ' ⚡';
+    desc += ' Puuskat ' + gust + ' m/s – olosuhteet epävakaita.';
+  }
+  return { s:s, lbl:lbl, col:col, bg:bg, desc:desc };
 }
 
 function windBarPct(v) { return (v / WIND_MAX_SHOW * 100).toFixed(1) + '%'; }
+function windBarPos(ws) { return Math.min(Math.max(ws / WIND_MAX_SHOW * 100, 0), 100).toFixed(1) + '%'; }
 
 function buildURL(la, lo, m) {
   var mdl = m === 'icon' ? 'icon_seamless' : 'ecmwf_ifs025';
@@ -220,26 +249,111 @@ function buildURL(la, lo, m) {
     + '?latitude=' + la + '&longitude=' + lo
     + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
     + '&daily=weathercode,temperature_2m_max,temperature_2m_min,windspeed_10m_max,winddirection_10m_dominant,windgusts_10m_max'
-    + '&current_weather=true'
-    + '&windspeed_unit=ms'
-    + '&timezone=auto'
-    + '&models=' + mdl
-    + '&forecast_days=7';
+    + '&current_weather=true&windspeed_unit=ms&timezone=auto&models=' + mdl + '&forecast_days=7';
 }
 
+// ── MODAL ────────────────────────────────────────────────
+function openModal(title, bodyHTML) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = bodyHTML;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+
+// ── TUNTI-DETAIL ─────────────────────────────────────────
+function showHourDetail(idx) {
+  if (!lastData) return;
+  var H = lastData.hourly;
+  var t = new Date(H.time[idx]);
+  var ws = Math.round(H.windspeed_10m[idx]);
+  var wd = H.winddirection_10m[idx];
+  var temp = Math.round(H.temperature_2m[idx]);
+  var gust = Math.round(H.windgusts_10m[idx] || ws);
+  var wc = H.weathercode[idx];
+  var si = sailCalc(ws, gust);
+  var timeStr = t.toLocaleDateString('fi-FI',{weekday:'long',day:'numeric',month:'numeric'})
+              + ' klo ' + t.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
+
+  var html =
+    '<div class="sail-detail-box" style="background:' + si.bg + '">'
+      + '<div class="sail-detail-score" style="color:' + si.col + '">' + si.s + '<span style="font-size:20px;font-weight:400;color:' + si.col + '">/100</span></div>'
+      + '<div class="sail-detail-name" style="color:' + si.col + '">' + si.lbl + '</div>'
+      + '<div class="sail-detail-desc" style="color:' + si.col + '">' + si.desc + '</div>'
+    + '</div>'
+    + '<div class="hd-grid">'
+      + '<div class="hd-stat"><div class="hd-stat-l">🌡 Lämpötila</div><div class="hd-stat-v">' + temp + '<span class="hd-stat-u">°C</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">💨 Tuuli</div><div class="hd-stat-v">' + ws + '<span class="hd-stat-u"> m/s</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">💥 Puuskat</div><div class="hd-stat-v">' + gust + '<span class="hd-stat-u"> m/s</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">🧭 Suunta</div><div class="hd-stat-v">' + Math.round(wd) + '<span class="hd-stat-u">° ' + dirCard(wd) + '</span></div></div>'
+    + '</div>'
+    + '<div style="text-align:center;font-size:28px;margin-bottom:8px">' + (WI[wc]||'🌡') + '</div>'
+    + '<div style="text-align:center;font-size:14px;color:var(--muted)">' + (WD[wc]||'') + '</div>';
+
+  openModal(timeStr, html);
+}
+
+// ── PÄIVÄ-TUNTIENNUSTE ───────────────────────────────────
+function showDayHours(dayIdx) {
+  if (!lastData) return;
+  var H = lastData.hourly;
+  var D = lastData.daily;
+  var dayDate = D.time[dayIdx];
+  var d = new Date(dayDate);
+  var dn = dayIdx===0?'Tänään':dayIdx===1?'Huomenna':DNS[d.getDay()]+' '+d.getDate()+'.';
+  var title = dn + ' – tuntiennuste';
+
+  // etsi tunnit 06:00–22:00 kyseiselle päivälle
+  var html = '<div class="day-hours">';
+  var found = false;
+  for (var i = 0; i < H.time.length; i++) {
+    var t = new Date(H.time[i]);
+    var tDate = t.toISOString().slice(0,10);
+    var tHour = t.getHours();
+    if (tDate === dayDate && tHour >= 6 && tHour <= 22) {
+      found = true;
+      var ws = Math.round(H.windspeed_10m[i]);
+      var wd = H.winddirection_10m[i];
+      var temp = Math.round(H.temperature_2m[i]);
+      var gust = Math.round(H.windgusts_10m[i] || ws);
+      var wc = H.weathercode[i];
+      var si = sailCalc(ws, gust);
+      var hh = tHour.toString().padStart(2,'0') + ':00';
+      html += '<div class="dhr">'
+        + '<span class="dhr-time">' + hh + '</span>'
+        + '<span class="dhr-wmo">' + (WI[wc]||'🌡') + '</span>'
+        + '<span class="dhr-temp">' + temp + '°</span>'
+        + '<span class="dhr-wind">' + ws + ' m/s</span>'
+        + '<span class="dhr-dir">' + dirCard(wd) + '</span>'
+        + '<span class="dhr-sail" style="color:' + si.col + ';background:' + si.bg + '">' + si.lbl.replace(' ⭐','').replace(' ⚡','⚡') + '</span>'
+        + '</div>';
+    }
+  }
+  if (!found) html += '<div style="color:var(--muted);text-align:center;padding:20px">Ei dataa saatavilla</div>';
+  html += '</div>';
+  openModal(title, html);
+}
+
+// ── RENDER ───────────────────────────────────────────────
 function render(data) {
+  lastData = data;
   var cw = data.current_weather;
   var si = sailCalc(cw.windspeed, null);
   var now = new Date();
   var H = data.hourly, D = data.daily;
 
-  // löydä nykyinen tunti
   var ci = 0;
   for (var i = 0; i < H.time.length; i++) {
     if (new Date(H.time[i]) >= now) { ci = i; break; }
   }
 
-  // ── Tuntiennuste ────────────────────────────────────────
+  // Tuntiennuste
   var hrs = '';
   for (var i = ci; i < Math.min(ci + 24, H.time.length); i++) {
     var t = new Date(H.time[i]);
@@ -250,21 +364,22 @@ function render(data) {
     var gust = Math.round(H.windgusts_10m[i] || ws);
     var wc = H.weathercode[i];
     var hi = sailCalc(ws, gust);
-    hrs += '<div class="hc' + (i === ci ? ' hl' : '') + '">'
-      + '<div class="ht">' + (i === ci ? 'nyt' : hh) + '</div>'
-      + '<div class="hwmo">' + (WI[wc] || '🌡') + '</div>'
+    var idx = i;
+    hrs += '<div class="hc' + (i===ci?' hl':'') + '" onclick="showHourDetail(' + idx + ')">'
+      + '<div class="ht">' + (i===ci?'nyt':hh) + '</div>'
+      + '<div class="hwmo">' + (WI[wc]||'🌡') + '</div>'
       + '<div class="htemp">' + temp + '°</div>'
       + '<div class="hw">' + ws + ' m/s</div>'
       + '<div class="hd">' + dirCard(wd) + '</div>'
-      + '<div class="hsi" style="color:' + hi.col + ';background:' + hi.bg + '">' + hi.lbl.replace(' ⭐','').replace(' ⚡','') + '</div>'
+      + '<div class="hsi" style="color:' + hi.col + ';background:' + hi.bg + '">' + hi.lbl.replace(' ⭐','').replace(' ⚡','⚡') + '</div>'
       + '</div>';
   }
 
-  // ── Päiväennuste ────────────────────────────────────────
+  // 7 vrk ennuste
   var days = '';
   for (var i = 0; i < Math.min(D.time.length, 7); i++) {
     var dd = new Date(D.time[i]);
-    var dn = i === 0 ? 'Tänään' : i === 1 ? 'Huomenna' : DNS[dd.getDay()];
+    var dn = i===0?'Tänään':i===1?'Huomenna':DNS[dd.getDay()]+' '+dd.getDate()+'.';
     var wc = D.weathercode[i];
     var ws = Math.round(D.windspeed_10m_max[i]);
     var wd = D.winddirection_10m_dominant[i];
@@ -272,38 +387,39 @@ function render(data) {
     var tmin = Math.round(D.temperature_2m_min[i]);
     var gust = Math.round(D.windgusts_10m_max[i] || ws);
     var dsi = sailCalc(ws, gust);
-    days += '<div class="dr">'
+    var dayIdx = i;
+    days += '<div class="dr" onclick="showDayHours(' + dayIdx + ')">'
       + '<span class="dn">' + dn + '</span>'
-      + '<span class="di">' + (WI[wc] || '🌡') + '</span>'
+      + '<span class="di">' + (WI[wc]||'🌡') + '</span>'
       + '<span class="dt">' + tmax + '° <span class="dt-min">/ ' + tmin + '°</span></span>'
       + '<span class="dw">' + ws + ' m/s ' + dirCard(wd) + '</span>'
       + '<span class="dsail" style="color:' + dsi.col + ';background:' + dsi.bg + '">' + dsi.lbl + '</span>'
+      + '<span class="dr-chevron">›</span>'
       + '</div>';
   }
 
-  // ── Tuulibaari ─────────────────────────────────────────
+  // Tuulibaari
   var barHTML = '<div class="wind-bar-wrap">'
     + '<div class="wind-bar-labels">'
-    + '<span>0</span><span>' + WIND_IDEAL_MIN + '</span><span>' + WIND_STRONG + '</span><span>' + WIND_VERY_STRONG + '</span><span>' + WIND_MAX_SHOW + '+ m/s</span>'
+    + '<span>0</span><span>' + WIND_IDEAL_MIN + '</span><span>' + WIND_STRONG + '</span><span>' + WIND_VERY_STRONG + '</span><span>' + WIND_MAX_SHOW + '+</span>'
     + '</div>'
     + '<div class="wind-bar" style="background:linear-gradient(to right,'
-    + ' #1a7a4a 0%, #1a7a4a ' + windBarPct(WIND_IDEAL_MAX) + ','
-    + ' #b87c1a ' + windBarPct(WIND_IDEAL_MAX) + ', #b87c1a ' + windBarPct(WIND_STRONG) + ','
-    + ' #c45c00 ' + windBarPct(WIND_STRONG) + ', #c45c00 ' + windBarPct(WIND_VERY_STRONG) + ','
-    + ' #b82222 ' + windBarPct(WIND_VERY_STRONG) + ', #b82222 100%)">'
+    + '#1a7a4a 0%,#1a7a4a ' + windBarPct(WIND_IDEAL_MAX) + ','
+    + '#b87c1a ' + windBarPct(WIND_IDEAL_MAX) + ',#b87c1a ' + windBarPct(WIND_STRONG) + ','
+    + '#c45c00 ' + windBarPct(WIND_STRONG) + ',#c45c00 ' + windBarPct(WIND_VERY_STRONG) + ','
+    + '#b82222 ' + windBarPct(WIND_VERY_STRONG) + ',#b82222 100%)">'
     + '<div class="wind-marker" style="left:' + windBarPos(cw.windspeed) + '"></div>'
     + '</div></div>';
 
-  var mdlTag = curModel === 'icon' ? 'ICON-D2 (2 km · ≤3 h vanha)' : 'ECMWF IFS (9 km · ≤6 h vanha)';
+  var mdlTag = curModel==='icon' ? 'ICON-D2 (2 km · ≤3 h vanha)' : 'ECMWF IFS (9 km · ≤6 h vanha)';
 
   document.getElementById('main-content').innerHTML =
-    // NOW
     '<div class="now-card">'
       + '<div class="now-top">'
         + '<div class="now-left">'
           + '<div class="loc">📍 ' + locName + '</div>'
           + '<div class="now-temp">' + Math.round(cw.temperature) + '°C</div>'
-          + '<div class="now-desc">' + (WI[cw.weathercode] || '') + ' ' + (WD[cw.weathercode] || '') + '</div>'
+          + '<div class="now-desc">' + (WI[cw.weathercode]||'') + ' ' + (WD[cw.weathercode]||'') + '</div>'
         + '</div>'
         + '<div class="sail-box">'
           + '<div class="sail-score" style="color:' + si.col + '">' + si.s + '</div>'
@@ -312,33 +428,26 @@ function render(data) {
         + '</div>'
       + '</div>'
       + '<div class="now-stats">'
-        + '<div class="nstat"><div class="nstat-l">💨 Tuuli</div><div class="nstat-v">' + Math.round(cw.windspeed) + ' <span class="nstat-u">m/s</span></div></div>'
-        + '<div class="nstat"><div class="nstat-l">🧭 Suunta</div><div class="nstat-v">' + Math.round(cw.winddirection) + '° <span class="nstat-u">' + dirCard(cw.winddirection) + '</span></div></div>'
-        + '<div class="nstat"><div class="nstat-l">⏱ Aika</div><div class="nstat-v">' + now.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) + '</div></div>'
+        + '<div class="nstat"><div class="nstat-l">💨 Tuuli</div><div class="nstat-v">' + Math.round(cw.windspeed) + '<span class="nstat-u"> m/s</span></div></div>'
+        + '<div class="nstat"><div class="nstat-l">🧭 Suunta</div><div class="nstat-v">' + Math.round(cw.winddirection) + '<span class="nstat-u">° ' + dirCard(cw.winddirection) + '</span></div></div>'
+        + '<div class="nstat"><div class="nstat-l">⏱ Päivitetty</div><div class="nstat-v">' + now.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) + '</div></div>'
       + '</div>'
       + barHTML
     + '</div>'
-
-    // HOURLY
-    + '<div class="sec-label">Tuntiennuste · 24 h</div>'
+    + '<div class="sec-label">Tuntiennuste · 24 h &nbsp;<span style="font-weight:400;font-size:11px">(kosketa tunnille)</span></div>'
     + '<div class="hourly-scroll"><div class="hourly-row">' + hrs + '</div></div>'
-
-    // DAILY
-    + '<div class="sec-label">7 vuorokauden ennuste</div>'
+    + '<div class="sec-label">7 vuorokauden ennuste &nbsp;<span style="font-weight:400;font-size:11px">(kosketa päivälle)</span></div>'
     + '<div class="daily-list">' + days + '</div>'
-
-    // LEGEND
     + '<div class="legend">'
       + '<div class="legend-title">Quartet – purjeluindeksi</div>'
       + '<div class="legend-row"><span class="legend-dot" style="background:#6b7a8d"></span><span class="legend-name">Tyyni</span><span class="legend-range">alle 3 m/s</span></div>'
-      + '<div class="legend-row"><span class="legend-dot" style="background:#1a7a4a"></span><span class="legend-name">Kevyt</span><span class="legend-range">3–5 m/s</span></div>'
+      + '<div class="legend-row"><span class="legend-dot" style="background:#1a7a4a"></span><span class="legend-name">Kevyt</span><span class="legend-range">3–' + WIND_IDEAL_MIN + ' m/s</span></div>'
       + '<div class="legend-row"><span class="legend-dot" style="background:#0a4272"></span><span class="legend-name">Paras keli ⭐</span><span class="legend-range">' + WIND_IDEAL_MIN + '–' + WIND_IDEAL_MAX + ' m/s</span></div>'
       + '<div class="legend-row"><span class="legend-dot" style="background:#1a7a4a"></span><span class="legend-name">Hyvä</span><span class="legend-range">' + WIND_IDEAL_MAX + '–' + WIND_STRONG + ' m/s</span></div>'
       + '<div class="legend-row"><span class="legend-dot" style="background:#c45c00"></span><span class="legend-name">Kova tuuli</span><span class="legend-range">' + WIND_STRONG + '–' + WIND_VERY_STRONG + ' m/s</span></div>'
       + '<div class="legend-row"><span class="legend-dot" style="background:#b82222"></span><span class="legend-name">Erittäin kova</span><span class="legend-range">yli ' + WIND_VERY_STRONG + ' m/s</span></div>'
     + '</div>'
-
-    + '<div class="update-info">Malli: ' + mdlTag + ' · Päivitetty ' + now.toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) + '</div>';
+    + '<div class="update-info">Malli: ' + mdlTag + ' · ' + APP_VERSION + ' · ' + now.toLocaleString('fi-FI',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) + '</div>';
 }
 
 async function load() {
@@ -361,13 +470,13 @@ async function load() {
 
 function switchModel(m) {
   curModel = m;
-  document.getElementById('tab-icon').classList.toggle('active', m === 'icon');
-  document.getElementById('tab-ecmwf').classList.toggle('active', m === 'ecmwf');
+  document.getElementById('tab-icon').classList.toggle('active', m==='icon');
+  document.getElementById('tab-ecmwf').classList.toggle('active', m==='ecmwf');
   load();
 }
 
 function setLoc(name, la, lo, btn) {
-  lat = la; lon = lo; locName = name;
+  lat=la; lon=lo; locName=name;
   document.getElementById('loc-input').value = name;
   document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
@@ -383,7 +492,7 @@ async function searchLoc() {
     var d = await r.json();
     if (d.results && d.results.length) {
       var res = d.results[0];
-      setLoc(res.name + (res.country_code === 'FI' ? '' : ', ' + res.country), res.latitude, res.longitude, null);
+      setLoc(res.name + (res.country_code==='FI' ? '' : ', '+res.country), res.latitude, res.longitude, null);
     } else { alert('Sijaintia ei löydy.'); }
   } catch(e) { alert('Hakuvirhe: ' + e.message); }
 }
@@ -391,8 +500,8 @@ async function searchLoc() {
 function fetchGPS() {
   if (!navigator.geolocation) { alert('GPS ei käytettävissä'); return; }
   navigator.geolocation.getCurrentPosition(function(p) {
-    lat = p.coords.latitude; lon = p.coords.longitude;
-    locName = lat.toFixed(3) + '°N, ' + lon.toFixed(3) + '°E';
+    lat=p.coords.latitude; lon=p.coords.longitude;
+    locName=lat.toFixed(3)+'°N, '+lon.toFixed(3)+'°E';
     document.getElementById('loc-input').value = locName;
     document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
     cache = {};
@@ -405,6 +514,10 @@ window.setLoc = setLoc;
 window.searchLoc = searchLoc;
 window.fetchGPS = fetchGPS;
 window.load = load;
+window.closeModal = closeModal;
+window.closeModalDirect = closeModalDirect;
+window.showHourDetail = showHourDetail;
+window.showDayHours = showDayHours;
 
 document.getElementById('loc-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchLoc(); });
 
