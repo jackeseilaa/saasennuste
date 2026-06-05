@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.6</title>
+<title>Purjehdussää v1.7</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -141,7 +141,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.6</span>
+  <span class="version">v1.7</span>
 </div>
 
 <div class="loc-bar">
@@ -190,7 +190,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.6';
+var APP_VERSION = 'v1.7';
 
 // ── Quartet-rajat ────────────────────────────────────────
 var WIND_IDEAL_MIN   = 5;
@@ -506,7 +506,15 @@ function fetchGPS() {
   if (!navigator.geolocation) { alert('GPS ei käytettävissä'); return; }
   navigator.geolocation.getCurrentPosition(function(p) {
     lat=p.coords.latitude; lon=p.coords.longitude;
-    locName=lat.toFixed(3)+'°N, '+lon.toFixed(3)+'°E';
+    function toDMS(deg, isLat) {
+      var d = Math.abs(deg);
+      var dd = Math.floor(d);
+      var mm = Math.floor((d - dd) * 60);
+      var ss = Math.round(((d - dd) * 60 - mm) * 60);
+      var dir = isLat ? (deg >= 0 ? 'N' : 'S') : (deg >= 0 ? 'E' : 'W');
+      return dd + '°' + mm.toString().padStart(2,'0') + '\'' + ss.toString().padStart(2,'0') + '\"' + dir;
+    }
+    locName = toDMS(lat, true) + ' ' + toDMS(lon, false);
     document.getElementById('loc-input').value = locName;
     document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
     cache = {};
