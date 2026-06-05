@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.4</title>
+<title>Purjehdussää v1.5</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -128,7 +128,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .dhr-wmo { font-size: 18px; flex: 0 0 24px; text-align: center; }
 .dhr-temp { font-size: 14px; min-width: 38px; }
 .dhr-wind { font-size: 14px; font-weight: 500; min-width: 64px; }
-.dhr-dir { font-size: 12px; color: var(--muted); min-width: 58px; }
+.dhr-dir { font-size: 12px; color: var(--muted); min-width: 62px; display:inline-flex; align-items:center; gap:3px; }
 .dhr-sail { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
 </style>
 </head>
@@ -141,7 +141,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.4</span>
+  <span class="version">v1.5</span>
 </div>
 
 <div class="loc-bar">
@@ -190,7 +190,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.4';
+var APP_VERSION = 'v1.5';
 
 // ── Quartet-rajat ────────────────────────────────────────
 var WIND_IDEAL_MIN   = 5;
@@ -209,6 +209,11 @@ var WD = {0:'Selkeää',1:'Pääosin selkeää',2:'Puolipilvistä',3:'Pilvistä'
 var DNS = ['Su','Ma','Ti','Ke','To','Pe','La'];
 
 function dirCard(d) { return ['P','KP','K','KE','E','KA','L','LP'][Math.round(d/45)%8]; }
+function dirArrow(deg) {
+  // nuoli osoittaa tuulen TULOSUUNTAAN (vastakkainen kulkusuuntaan)
+  var rotate = (deg + 180) % 360;
+  return '<svg width="18" height="18" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate(' + rotate + 'deg)" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="9" y1="15" x2="9" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="5,7 9,3 13,7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
+}
 
 function sailCalc(ws, gust) {
   ws = ws || 0;
@@ -330,7 +335,7 @@ function showDayHours(dayIdx) {
         + '<span class="dhr-wmo">' + (WI[wc]||'🌡') + '</span>'
         + '<span class="dhr-temp">' + temp + '°</span>'
         + '<span class="dhr-wind">' + ws + ' m/s</span>'
-        + '<span class="dhr-dir">' + Math.round(wd) + '° ' + dirCard(wd) + '</span>'
+        + '<span class="dhr-dir">' + dirArrow(wd) + ' ' + Math.round(wd) + '°</span>'
         + '<span class="dhr-sail" style="color:' + si.col + ';background:' + si.bg + '">' + si.lbl.replace(' ⭐','').replace(' ⚡','⚡') + '</span>'
         + '</div>';
     }
