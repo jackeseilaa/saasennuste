@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.3</title>
+<title>Purjehdussää v1.4</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -128,7 +128,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 .dhr-wmo { font-size: 18px; flex: 0 0 24px; text-align: center; }
 .dhr-temp { font-size: 14px; min-width: 38px; }
 .dhr-wind { font-size: 14px; font-weight: 500; min-width: 64px; }
-.dhr-dir { font-size: 12px; color: var(--muted); min-width: 28px; }
+.dhr-dir { font-size: 12px; color: var(--muted); min-width: 58px; }
 .dhr-sail { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-left: auto; }
 </style>
 </head>
@@ -141,7 +141,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.3</span>
+  <span class="version">v1.4</span>
 </div>
 
 <div class="loc-bar">
@@ -190,7 +190,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.3';
+var APP_VERSION = 'v1.4';
 
 // ── Quartet-rajat ────────────────────────────────────────
 var WIND_IDEAL_MIN   = 5;
@@ -330,7 +330,7 @@ function showDayHours(dayIdx) {
         + '<span class="dhr-wmo">' + (WI[wc]||'🌡') + '</span>'
         + '<span class="dhr-temp">' + temp + '°</span>'
         + '<span class="dhr-wind">' + ws + ' m/s</span>'
-        + '<span class="dhr-dir">' + dirCard(wd) + '</span>'
+        + '<span class="dhr-dir">' + Math.round(wd) + '° ' + dirCard(wd) + '</span>'
         + '<span class="dhr-sail" style="color:' + si.col + ';background:' + si.bg + '">' + si.lbl.replace(' ⭐','').replace(' ⚡','⚡') + '</span>'
         + '</div>';
     }
