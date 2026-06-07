@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v2.8</title>
+<title>Purjehdussää v2.9</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -187,7 +187,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v2.8</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v2.9</span>
 </div>
 
 <script>
@@ -286,7 +286,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.8';
+var APP_VERSION = 'v2.9';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -1165,37 +1165,32 @@ async function load() {
     clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
-    if (!d.hourly) throw new Error('Malli ei vastannut (ei hourly-dataa)');
-    // Varmista current_weather — generoi tarvittaessa hourly-datasta
+    if (!d.hourly) throw new Error('Ei hourly-dataa');
     if (!d.current_weather) {
-      var H = d.hourly;
-      var now = new Date();
+      var H = d.hourly; var now2 = new Date();
       for (var i = 0; i < H.time.length; i++) {
-        if (new Date(H.time[i]) >= now) {
-          d.current_weather = {
-            temperature: H.temperature_2m[i],
-            windspeed: H.windspeed_10m[i],
-            winddirection: H.winddirection_10m[i],
-            weathercode: H.weathercode[i],
-            time: H.time[i]
-          };
+        if (new Date(H.time[i]) >= now2) {
+          d.current_weather = { temperature: H.temperature_2m[i], windspeed: H.windspeed_10m[i], winddirection: H.winddirection_10m[i], weathercode: H.weathercode[i], time: H.time[i] };
           break;
         }
       }
     }
-    if (!d.current_weather) throw new Error('Ei säädataa nykyhetkelle');
+    if (!d.current_weather) throw new Error('Ei nykyhetken dataa');
     cache[key] = d;
+    // Näytä virhe jos render kaatuu
     try {
       render(d);
-    } catch(renderErr) {
+    } catch(re) {
       document.getElementById('main-content').innerHTML =
-        '<div class="err">Näyttövirhe: ' + renderErr.message + '<br>'
-        + '<button class="retry-btn" onclick="cache={};load()">↻ Yritä uudelleen</button></div>';
+        '<div class="err" style="text-align:left;font-size:12px;word-break:break-all">'
+        + '<strong>Render-virhe:</strong><br>' + re.message + '<br><br>'
+        + '<strong>Stack:</strong><br>' + (re.stack || '').replace(/\n/g,'<br>').substring(0,500)
+        + '<br><br><button class="retry-btn" onclick="cache={};load()">↻ Yritä uudelleen</button></div>';
     }
   } catch(e) {
-    var msg = e.name === 'AbortError' ? 'Aikakatkaisu (15s) — hidas verkko?' : e.message;
+    var msg = e.name === 'AbortError' ? 'Aikakatkaisu 15s' : e.message;
     document.getElementById('main-content').innerHTML =
-      '<div class="err">Lataus epäonnistui<br><small style="word-break:break-all">' + msg + '</small><br>'
+      '<div class="err">Latausvirhe: ' + msg + '<br>'
       + '<button class="retry-btn" onclick="load()">↻ Yritä uudelleen</button></div>';
   }
 }
