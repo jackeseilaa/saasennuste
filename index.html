@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v2.7</title>
+<title>Purjehdussää v2.8</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -187,65 +187,52 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.7</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v2.8</span>
 </div>
 
 <script>
-async function checkVersionManual() {
+// Versiotarkistus — VAIN manuaalinen napautus tai 8s viive sivulatauksen jälkeen
+// Ei häiritse load()-funktiota
+function checkVersionManual() {
   var badge = document.getElementById('ver-badge');
-  badge.textContent = '...';
-  await checkVersion(true);
-}
-async function checkVersion(manual) {
-  var badge = document.getElementById('ver-badge');
-  // APP_VERSION on määritelty myöhemmin sivulla — odota että se on varmasti ladattu
-  var localVer = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : document.title.match(/v[\d.]+/) ? document.title.match(/v[\d.]+/)[0] : 'v2.5';
-  badge.textContent = localVer;
-  try {
-    // Poista ?v= parametri URL:sta ennen hakua
-    var baseUrl = 'https://raw.githubusercontent.com/jackeseilaa/saasennuste/main/index.html';
-    var r = await fetch(baseUrl + '?nocache=' + Date.now(), { cache: 'no-store' });
-    var txt = await r.text();
-    var m = txt.match(/APP_VERSION\s*=\s*'(v[\d.]+)'/);
+  var localVer = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : 'v2.8';
+  badge.textContent = '⟳';
+  fetch('https://raw.githubusercontent.com/jackeseilaa/saasennuste/main/index.html?t=' + Date.now(),
+    { cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }
+  ).then(function(r){ return r.text(); })
+  .then(function(txt) {
+    var m = txt.match(/var APP_VERSION\s*=\s*'(v[\d.]+)'/);
     var remoteVer = m ? m[1] : null;
     badge.textContent = localVer;
-
     if (remoteVer && remoteVer !== localVer) {
-      // Oikeasti uudempi versio
-      badge.textContent = localVer + ' \u2192 ' + remoteVer + ' \u2605';
-      badge.style.cssText = 'background:rgba(255,200,0,0.3);border-radius:6px;padding:2px 6px;cursor:pointer';
-      badge.title = 'Päivitys: ' + remoteVer;
-      var existing = document.getElementById('update-banner');
-      if (!existing) {
-        var banner = document.createElement('div');
-        banner.id = 'update-banner';
-        banner.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;position:sticky;top:0;z-index:999';
-        banner.innerHTML = '\u2B06\uFE0F Uusi versio ' + remoteVer + ' \u2014 napauta ladataksesi';
-        banner.onclick = function() {
-          // Navigoi puhtaaseen URL:iin ilman parametreja + force reload
-          var clean = location.protocol + '//' + location.host + location.pathname;
-          // Lisää uniikki hash joka pakottaa uuden latauksen
-          window.location.replace(clean + '?bust=' + Date.now());
-        };
-        document.body.insertBefore(banner, document.body.firstChild);
-      }
+      badge.textContent = remoteVer + ' ★';
+      badge.style.cssText = 'background:rgba(255,200,0,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;font-weight:700';
+      // Poista vanha banneri
+      var old = document.getElementById('upd');
+      if (old) old.remove();
+      var b = document.createElement('div');
+      b.id = 'upd';
+      b.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:9999';
+      b.textContent = '\u2B06 Versio ' + remoteVer + ' saatavilla — napauta ladataksesi';
+      b.onclick = function(){
+        var url = location.protocol + '//' + location.host + location.pathname + '?r=' + Date.now();
+        window.location.replace(url);
+      };
+      document.body.prepend(b);
     } else {
-      // Versio on ajan tasalla tai sama
-      var existing2 = document.getElementById('update-banner');
-      if (existing2) existing2.remove();
-      badge.title = 'Uusin versio (' + localVer + ')';
-      if (manual) {
-        badge.style.cssText = 'background:rgba(26,122,74,0.3);border-radius:6px;padding:2px 6px;cursor:pointer';
-        setTimeout(function(){ badge.style.cssText = 'cursor:pointer'; badge.textContent = localVer; }, 2500);
-      }
+      badge.textContent = localVer + ' ✓';
+      setTimeout(function(){ badge.textContent = localVer; badge.style.cssText='cursor:pointer'; }, 2000);
     }
-  } catch(e) {
-    badge.textContent = localVer;
-    if (manual) badge.title = 'Tarkistus epäonnistui: ' + e.message;
-  }
+  }).catch(function(){
+    badge.textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v2.8';
+  });
 }
-// Tarkista vasta kun sivu on täysin ladattu (APP_VERSION on määritelty)
-window.addEventListener('load', function(){ setTimeout(checkVersion, 2000); });
+// Automaattinen tarkistus vasta 8s sivulatauksen jälkeen — load() ehtii valmistua ensin
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if (typeof APP_VERSION !== 'undefined') checkVersionManual();
+  }, 8000);
+});
 window.checkVersionManual = checkVersionManual;
 </script>
 
@@ -299,7 +286,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.7';
+var APP_VERSION = 'v2.8';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
