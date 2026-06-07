@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v2.0</title>
+<title>Purjehdussää v2.1</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v2.0</span>
+  <span class="version">v2.1</span>
 </div>
 
 <div class="loc-bar">
@@ -237,7 +237,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v2.0';
+var APP_VERSION = 'v2.1';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -551,31 +551,59 @@ async function showRouteView(btn) {
   var positionsAB = buildHourlyPositions(segsAB, '2026-06-12', 9);
   var positionsBA = buildHourlyPositions(segsBA, '2026-06-14', 9);
 
+  // ── MULTI-MODEL ENSEMBLE ──────────────────────────────────
+  // Mallit tärkeysjärjestyksessä Suomenlahdelle:
+  // 1. MetNO Nordic (1 km, 1h päivitys) — paras 0–2.5 vrk, kattaa FI+EE
+  // 2. ECMWF IFS 9 km — maailman tarkin globaalimalli 3–10 vrk
+  // 3. ICON-seamless (2 km) — DWD:n korkearesoluutiomalli Euroopalle
+  // Yhdistelmä: painotettu keskiarvo, ECMWF paino korostuu yli 2.5 vrk
+
   var forecastCache = {};
-  async function getForecast(lat, lon) {
-    var key = lat.toFixed(2) + '_' + lon.toFixed(2);
+
+  async function fetchModel(lat, lon, model) {
+    var key = model + '_' + lat.toFixed(2) + '_' + lon.toFixed(2);
     if (forecastCache[key]) return forecastCache[key];
-    var url = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
-      + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-      + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
+    var baseUrl, url;
+    if (model === 'metno') {
+      // MetNO Nordic API — 1 km, blendattu ECMWF:ään yli 2.5 vrk
+      url = 'https://api.open-meteo.com/v1/metno'
+        + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
+        + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+        + '&windspeed_unit=ms&timezone=Europe/Helsinki&forecast_days=16';
+    } else if (model === 'ecmwf') {
+      // ECMWF IFS 9 km — natiivi resoluutio, paras 3–15 vrk
+      url = 'https://api.open-meteo.com/v1/ecmwf'
+        + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
+        + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+        + '&windspeed_unit=ms&timezone=Europe/Helsinki&forecast_days=15';
+    } else {
+      // ICON-seamless — DWD 2 km paikallinen + globaali sulautuma
+      url = 'https://api.open-meteo.com/v1/forecast'
+        + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
+        + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+        + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
+    }
     var r = await fetch(url);
     var d = await r.json();
+    if (!d.hourly) throw new Error('Malli ' + model + ' ei vastannut');
     forecastCache[key] = d;
     return d;
   }
 
-  async function getWeatherAtPoint(lat, lon, dateKey, clockH) {
-    var d = await getForecast(lat, lon);
-    var H = d.hourly;
+  // Hae arvo tietystä mallista tietyllä ajalla
+  function extractFromModel(data, dateKey, clockH) {
+    if (!data || !data.hourly) return null;
+    var H = data.hourly;
     var target = dateKey + 'T' + String(clockH).padStart(2,'0') + ':00';
     for (var i = 0; i < H.time.length; i++) {
       if (H.time[i] === target) {
+        var ws = H.windspeed_10m[i];
+        var wd = H.winddirection_10m[i];
+        var gust = H.windgusts_10m ? H.windgusts_10m[i] : ws * 1.3;
         return {
-          ws: Math.round(H.windspeed_10m[i]),
-          wd: H.winddirection_10m[i],
-          gust: Math.round(H.windgusts_10m[i] || H.windspeed_10m[i]),
-          temp: Math.round(H.temperature_2m[i]),
+          ws: ws, wd: wd,
+          gust: gust || ws,
+          temp: H.temperature_2m[i],
           wc: H.weathercode[i]
         };
       }
@@ -583,21 +611,131 @@ async function showRouteView(btn) {
     return null;
   }
 
+  // Blend tuulisuunnat (circular mean)
+  function circularMean(angles, weights) {
+    var sx = 0, sy = 0, tw = 0;
+    for (var i = 0; i < angles.length; i++) {
+      if (angles[i] == null || weights[i] == null) continue;
+      var rad = angles[i] * Math.PI / 180;
+      sx += Math.cos(rad) * weights[i];
+      sy += Math.sin(rad) * weights[i];
+      tw += weights[i];
+    }
+    if (tw === 0) return null;
+    return ((Math.atan2(sy/tw, sx/tw) * 180 / Math.PI) + 360) % 360;
+  }
+
+  // Paras konsensus: painotettu blend kolmesta mallista
+  // Paino riippuu ajasta: lähellä MetNO dominoi, kaukana ECMWF dominoi
+  function blendModels(metno, ecmwf, icon, daysAhead) {
+    var available = [];
+    var weights = [];
+
+    // Painot ajan funktiona
+    var wMetno, wEcmwf, wIcon;
+    if (daysAhead <= 2.5) {
+      // Alle 2.5 vrk: MetNO paras (1 km, tuore data)
+      wMetno = 0.50; wEcmwf = 0.30; wIcon = 0.20;
+    } else if (daysAhead <= 5) {
+      // 2.5–5 vrk: ECMWF nousee, MetNO (ECMWF-blended) edelleen hyvä
+      wMetno = 0.30; wEcmwf = 0.50; wIcon = 0.20;
+    } else {
+      // Yli 5 vrk: ECMWF selvästi paras
+      wMetno = 0.20; wEcmwf = 0.60; wIcon = 0.20;
+    }
+
+    var sources = [
+      { d: metno, w: wMetno, name: 'MetNO' },
+      { d: ecmwf, w: wEcmwf, name: 'ECMWF' },
+      { d: icon,  w: wIcon,  name: 'ICON' }
+    ];
+
+    // Kerää saatavilla olevat
+    var ws_vals = [], wd_vals = [], gust_vals = [], temp_vals = [], wc_vals = [], w_used = [];
+    var totalW = 0;
+    sources.forEach(function(s) {
+      if (s.d && s.d.ws != null && !isNaN(s.d.ws)) {
+        ws_vals.push(s.d.ws);
+        wd_vals.push(s.d.wd);
+        gust_vals.push(s.d.gust);
+        temp_vals.push(s.d.temp);
+        wc_vals.push(s.d.wc);
+        w_used.push(s.w);
+        totalW += s.w;
+        available.push(s.name);
+      }
+    });
+
+    if (ws_vals.length === 0) return null;
+
+    // Normalisoi painot
+    var wn = w_used.map(function(w){ return w/totalW; });
+
+    var ws_blend  = ws_vals.reduce(function(s,v,i){ return s+v*wn[i]; }, 0);
+    var gust_blend= gust_vals.reduce(function(s,v,i){ return s+v*wn[i]; }, 0);
+    var temp_blend= temp_vals.reduce(function(s,v,i){ return s+v*wn[i]; }, 0);
+    var wd_blend  = circularMean(wd_vals, wn);
+
+    // Sääsymboli: enemmistöäänestys (tai ECMWF jos saatavilla)
+    var wc = ecmwf && ecmwf.wc != null ? ecmwf.wc : (metno && metno.wc != null ? metno.wc : wc_vals[0]);
+
+    // Spread (mallien välinen hajonta) = epävarmuusmittari
+    var spread = 0;
+    if (ws_vals.length > 1) {
+      var mean = ws_blend;
+      spread = Math.sqrt(ws_vals.reduce(function(s,v){ return s+(v-mean)*(v-mean); }, 0) / ws_vals.length);
+    }
+
+    return {
+      ws: ws_blend,
+      wd: wd_blend,
+      gust: gust_blend,
+      temp: temp_blend,
+      wc: wc,
+      spread: spread,
+      sources: available,
+      wsMetno: metno ? metno.ws : null,
+      wsEcmwf: ecmwf ? ecmwf.ws : null,
+      wsIcon:  icon  ? icon.ws  : null
+    };
+  }
+
+  async function getWeatherAtPoint(lat, lon, dateKey, clockH, daysAhead) {
+    var results = await Promise.allSettled([
+      fetchModel(lat, lon, 'metno'),
+      fetchModel(lat, lon, 'ecmwf'),
+      fetchModel(lat, lon, 'icon')
+    ]);
+    var metnoData = results[0].status === 'fulfilled' ? extractFromModel(results[0].value, dateKey, clockH) : null;
+    var ecmwfData = results[1].status === 'fulfilled' ? extractFromModel(results[1].value, dateKey, clockH) : null;
+    var iconData  = results[2].status === 'fulfilled' ? extractFromModel(results[2].value, dateKey, clockH) : null;
+    return blendModels(metnoData, ecmwfData, iconData, daysAhead);
+  }
+
   var fmiObs = await fetchFMIobs();
 
+  // Laske kuinka monta vrk lähtöpäivästä (tänään = 7.6.)
+  var TODAY = new Date('2026-06-07');
+  function daysUntil(dateKey) {
+    var d = new Date(dateKey);
+    return (d - TODAY) / 86400000;
+  }
+
   async function buildLegRows(positions, dateKey) {
+    var daysAhead = daysUntil(dateKey);
     var rows = [];
+    // Fetch all models in parallel per position (cache handles deduplication)
     for (var i = 0; i < positions.length; i++) {
       var pos = positions[i];
-      var wx = await getWeatherAtPoint(pos.lat, pos.lon, dateKey, pos.clockH);
+      var wx = await getWeatherAtPoint(pos.lat, pos.lon, dateKey, pos.clockH, daysAhead + pos.h/24);
       rows.push({ pos: pos, wx: wx });
     }
     return rows;
   }
 
   document.getElementById('main-content').innerHTML =
-    '<div class="loading"><span class="spin">\u29d7</span><br><br>Haetaan s\u00e4\u00e4data Quartetin sijainnista\u2026<br>'
-    + '<small style="color:var(--muted)">2 matkaa \u00d7 ' + (Math.ceil(totalHours)+2) + ' pistett\u00e4 = ICON-D2 haut</small></div>';
+    '<div class="loading"><span class="spin">\u29d7</span><br><br>Haetaan 3 mallia \u00d7 reittipisteet\u2026<br>'
+    + '<small style="color:var(--muted)">MetNO Nordic 1km + ECMWF IFS 9km + ICON 2km \u2192 painotettu konsensus</small></div>';
 
   var rowsAB, rowsBA;
   try {
@@ -613,7 +751,7 @@ async function showRouteView(btn) {
   function renderDynLeg(rows, legTitle, legDate) {
     var worstSi = { s:100, col:'#1a7a4a', bg:'#e6f4ec', lbl:'Kevyt' };
     rows.forEach(function(r) {
-      if (r.wx) { var si = sailCalc(r.wx.ws, r.wx.gust); if (si.s < worstSi.s) worstSi = si; }
+      if (r.wx) { var si = sailCalc(Math.round(r.wx.ws), Math.round(r.wx.gust)); if (si.s < worstSi.s) worstSi = si; }
     });
     var arrH = 9 + Math.floor(totalHours);
     var arrMin = Math.round((totalHours % 1) * 60);
@@ -623,19 +761,21 @@ async function showRouteView(btn) {
       + '<div class="route-leg-head" onclick="toggleLeg(this)">'
         + '<div>'
           + '<div class="route-leg-name">' + legTitle + '</div>'
-          + '<div class="route-leg-date">' + legDate + ' \u00b7 L\u00e4ht\u00f6 09:00 \u2192 ~' + arrStr + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ' + SPEED_KTS + ' kts</div>'
+          + '<div class="route-leg-date">' + legDate + ' \u00b7 09:00 \u2192 ~' + arrStr + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ' + SPEED_KTS + ' kts</div>'
         + '</div>'
         + '<span class="route-leg-badge" style="color:' + worstSi.col + ';background:' + worstSi.bg + '">' + worstSi.lbl + '</span>'
       + '</div>'
       + '<div class="route-hours">'
-      + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:600;color:var(--muted);padding:5px 14px;gap:6px">'
+      // Column header
+      + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:600;color:var(--muted);padding:5px 14px;gap:5px">'
         + '<span style="min-width:40px">KLO</span>'
         + '<span style="min-width:20px"></span>'
-        + '<span style="min-width:32px">\u00b0C</span>'
-        + '<span style="min-width:54px">TUULI</span>'
-        + '<span style="min-width:50px">PUUSKA</span>'
-        + '<span style="min-width:72px">SUUNTA</span>'
-        + '<span style="flex:1">SIJAINTI / MATKA</span>'
+        + '<span style="min-width:30px">\u00b0C</span>'
+        + '<span style="min-width:52px">TUULI</span>'
+        + '<span style="min-width:48px">PUUSKA</span>'
+        + '<span style="min-width:70px">SUUNTA</span>'
+        + '<span style="flex:1">SIJAINTI</span>'
+        + '<span style="min-width:40px;text-align:center">\u00b1</span>'
         + '<span>KELI</span>'
       + '</div>';
 
@@ -644,20 +784,41 @@ async function showRouteView(btn) {
       var wx = row.wx;
       if (!wx) return;
       if (pos.arrived && pos.distFromStart > totalNM + 1) return;
-      var si = sailCalc(wx.ws, wx.gust);
+
+      var ws = Math.round(wx.ws);
+      var gust = Math.round(wx.gust);
+      var si = sailCalc(ws, gust);
       var isArr = pos.arrived || (pos.distFromStart >= totalNM - 0.5);
       var rowBg = isArr ? 'background:#eef8ee;' : '';
       var locLabel = isArr ? '\u2693\ufe0f ' + pos.name : '\u25b6 ' + pos.name;
-      html += '<div class="rhr" style="' + rowBg + 'gap:6px">'
+
+      // Spread-indikaattori: mallien välinen hajonta
+      var spreadHtml = '';
+      var sp = wx.spread || 0;
+      if (sp < 1.0) {
+        spreadHtml = '<span style="color:#1a7a4a;font-size:11px;font-weight:600" title="Mallien v\u00e4linen hajonta: ' + sp.toFixed(1) + ' m/s">\u2713</span>';
+      } else if (sp < 2.0) {
+        spreadHtml = '<span style="color:#b87c1a;font-size:11px;font-weight:600" title="Hajonta: ' + sp.toFixed(1) + ' m/s">\u007e</span>';
+      } else {
+        spreadHtml = '<span style="color:#b82222;font-size:11px;font-weight:600" title="Hajonta: ' + sp.toFixed(1) + ' m/s">\u26a0</span>';
+      }
+
+      // Mallivertailu tooltip
+      var srcTitle = 'MetNO:' + (wx.wsMetno!=null?Math.round(wx.wsMetno):'?')
+        + ' ECMWF:' + (wx.wsEcmwf!=null?Math.round(wx.wsEcmwf):'?')
+        + ' ICON:' + (wx.wsIcon!=null?Math.round(wx.wsIcon):'?') + ' m/s';
+
+      html += '<div class="rhr" style="' + rowBg + 'gap:5px" title="' + srcTitle + '">'
         + '<span class="rhr-time">' + pos.clockStr + '</span>'
         + '<span class="rhr-wmo" style="min-width:20px">' + (WI[wx.wc]||'\ud83c\udf21') + '</span>'
-        + '<span class="rhr-temp" style="min-width:32px">' + wx.temp + '\u00b0</span>'
-        + '<span class="rhr-wind" style="min-width:54px">' + wx.ws + ' m/s</span>'
-        + '<span class="rhr-gust" style="min-width:50px">\u2191' + wx.gust + ' m/s</span>'
-        + '<span class="rhr-dir" style="min-width:72px">' + dirArrow(wx.wd, 13) + ' ' + Math.round(wx.wd) + '\u00b0 ' + dirCard(wx.wd) + '</span>'
+        + '<span class="rhr-temp" style="min-width:30px">' + Math.round(wx.temp) + '\u00b0</span>'
+        + '<span class="rhr-wind" style="min-width:52px">' + ws + ' m/s</span>'
+        + '<span class="rhr-gust" style="min-width:48px">\u2191' + gust + ' m/s</span>'
+        + '<span class="rhr-dir" style="min-width:70px">' + dirArrow(wx.wd, 13) + ' ' + Math.round(wx.wd) + '\u00b0 ' + dirCard(wx.wd) + '</span>'
         + '<span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
           + locLabel + '<span style="color:#c0c8d4"> \u00b7 ' + pos.distFromStart.toFixed(0) + ' M</span>'
         + '</span>'
+        + '<span style="min-width:40px;text-align:center">' + spreadHtml + '</span>'
         + '<span class="rhr-sail" style="color:' + si.col + ';background:' + si.bg + ';white-space:nowrap">'
           + si.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
         + '</div>';
@@ -678,15 +839,22 @@ async function showRouteView(btn) {
 
   document.getElementById('main-content').innerHTML =
     '<div class="route-header">'
-      + '<div class="route-title">\u26f5 Helsinki \u2013 Tallinna \u00b7 Dynaaminen reittiennuste</div>'
-      + '<div class="route-sub">S\u00e4\u00e4 Quartetin sijainnista joka tunnilla \u00b7 ' + SPEED_KTS + ' kts \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ~' + totalHours.toFixed(1) + ' h</div>'
+      + '<div class="route-title">\u26f5 Helsinki \u2013 Tallinna \u00b7 Ensemble-reittiennuste</div>'
+      + '<div class="route-sub">MetNO 1km + ECMWF IFS 9km + ICON 2km \u00b7 painotettu konsensus \u00b7 5 kts \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ~' + totalHours.toFixed(1) + ' h</div>'
+    + '</div>'
+    + '<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#0a4272">'
+      + '<strong>Luotettavuusasteikko:</strong> '
+      + '<span style="color:#1a7a4a;font-weight:600">\u2713</span> mallien v\u00e4linen hajonta alle 1 m/s (luotettava) &nbsp;\u00b7&nbsp; '
+      + '<span style="color:#b87c1a;font-weight:600">\u007e</span> hajonta 1\u20132 m/s (kohtalainen) &nbsp;\u00b7&nbsp; '
+      + '<span style="color:#b82222;font-weight:600">\u26a0</span> hajonta yli 2 m/s (ep\u00e4varma) &nbsp;\u00b7&nbsp; '
+      + 'Vie hiiren rivin p\u00e4\u00e4lle n\u00e4hd\u00e4ksesi mallien yksitt\u00e4iset arvot'
     + '</div>'
     + fmiHtml
-    + '<div class="sec-label">Mennen \u00b7 Pe 12.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
+    + '<div class="sec-label">Mennessä \u00b7 Pe 12.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
     + renderDynLeg(rowsAB, 'L\u00e4ht\u00f6: Helsinki \u2192 Tallinna', 'Pe 12.6.2026')
     + '<div class="sec-label" style="margin-top:16px">Paluussa \u00b7 Su 14.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
     + renderDynLeg(rowsBA, 'Paluu: Tallinna \u2192 Helsinki', 'Su 14.6.2026')
-    + '<div class="update-info">ICON-D2 (Open-Meteo) \u00b7 FMI WFS \u00b7 S\u00e4\u00e4 interpoloitu Quartetin sijainnista joka tunnille \u00b7 ' + APP_VERSION + '</div>';
+    + '<div class="update-info">MetNO Nordic 1km \u00b7 ECMWF IFS 9km \u00b7 ICON-seamless 2km \u00b7 painotettu konsensus \u00b7 FMI WFS havainnot \u00b7 ' + APP_VERSION + '</div>';
 }
 
 function toggleLeg(el) {
