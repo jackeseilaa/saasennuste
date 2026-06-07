@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Debug</title>
+</head>
+<body style="font-family:monospace;padding:20px;font-size:14px">
+<div id="log"></div>
+<script>
+var APP_VERSION = 'debug1';
+function log(msg, color) {
+  var d = document.createElement('div');
+  d.style.color = color || '#000';
+  d.style.padding = '4px 0';
+  d.style.borderBottom = '1px solid #eee';
+  d.textContent = new Date().toLocaleTimeString('fi') + ' — ' + msg;
+  document.getElementById('log').prepend(d);
+}
+log('Sivu ladattu, aloitetaan testi...', '#0a4272');
+
+async function test() {
+  log('Fetch alkaa...', '#666');
+  try {
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); log('AIKAKATKAISU 15s!', 'red'); }, 15000);
+    
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=60.1469&longitude=24.9877'
+      + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+      + '&daily=weathercode,temperature_2m_max,temperature_2m_min,windspeed_10m_max,winddirection_10m_dominant,windgusts_10m_max'
+      + '&current_weather=true&windspeed_unit=ms&timezone=auto&models=icon_seamless&forecast_days=7';
+    
+    log('URL: ' + url.substring(0, 60) + '...', '#666');
+    var r = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    log('HTTP status: ' + r.status, r.ok ? 'green' : 'red');
+    
+    var d = await r.json();
+    log('JSON saatu. Kentät: ' + Object.keys(d).join(', '), 'green');
+    log('current_weather: ' + JSON.stringify(d.current_weather).substring(0,80), 'green');
+    log('hourly.time[0]: ' + (d.hourly && d.hourly.time ? d.hourly.time[0] : 'puuttuu'), 'green');
+    log('daily olemassa: ' + (d.daily ? 'kyllä, ' + d.daily.time.length + ' päivää' : 'EI'), d.daily ? 'green' : 'red');
+    log('✅ KAIKKI TOIMII', '#1a7a4a');
+  } catch(e) {
+    log('VIRHE: ' + e.name + ': ' + e.message, 'red');
+    if (e.name === 'AbortError') log('→ Fetch kesti yli 15s, verkko liian hidas?', 'red');
+    if (e.message.includes('Failed to fetch')) log('→ Verkkovirhe tai CORS-ongelma', 'red');
+  }
+}
+
+window.addEventListener('load', function(){ test(); });
+</script>
+</body>
+</html>
