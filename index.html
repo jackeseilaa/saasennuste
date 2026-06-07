@@ -184,8 +184,62 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v2.1</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.1</span>
 </div>
+
+<script>
+async function checkVersionManual() {
+  var badge = document.getElementById('ver-badge');
+  badge.textContent = '...';
+  await checkVersion(true);
+}
+async function checkVersion(manual) {
+  var badge = document.getElementById('ver-badge');
+  try {
+    var r = await fetch(
+      'https://raw.githubusercontent.com/jackeseilaa/saasennuste/main/index.html',
+      { cache: 'no-store' }
+    );
+    var txt = await r.text();
+    // Hae versio tiedostosta: APP_VERSION = 'vX.X'
+    var m = txt.match(/APP_VERSION\s*=\s*'(v[\d.]+)'/);
+    var remoteVer = m ? m[1] : null;
+    var localVer = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v2.1';
+    badge.textContent = localVer;
+    if (remoteVer && remoteVer !== localVer) {
+      // Uudempi versio saatavilla
+      badge.textContent = localVer + ' \u2192 ' + remoteVer + ' \u2605';
+      badge.style.background = 'rgba(255,200,0,0.3)';
+      badge.style.borderRadius = '6px';
+      badge.style.padding = '2px 6px';
+      badge.title = 'P\u00e4ivitys saatavilla: ' + remoteVer + '. Lataa sivu uudelleen (F5).';
+      // Banner
+      var existing = document.getElementById('update-banner');
+      if (!existing) {
+        var banner = document.createElement('div');
+        banner.id = 'update-banner';
+        banner.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;';
+        banner.innerHTML = '\u2B06\uFE0F Uusi versio ' + remoteVer + ' saatavilla \u2014 napauta ladataksesi';
+        banner.onclick = function(){ location.reload(true); };
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+    } else {
+      badge.title = remoteVer ? 'Sinulla on uusin versio (' + localVer + ')' : 'Versiotarkistus ep\u00e4onnistui';
+      if (manual) {
+        badge.style.background = 'rgba(26,122,74,0.3)';
+        badge.style.borderRadius = '6px';
+        badge.style.padding = '2px 6px';
+        setTimeout(function(){ badge.style.cssText=''; badge.textContent=localVer; }, 2500);
+      }
+    }
+  } catch(e) {
+    badge.textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v2.1';
+    if (manual) badge.title = 'Verkkovirhe: ' + e.message;
+  }
+}
+window.addEventListener('load', function(){ setTimeout(checkVersion, 3000); });
+window.checkVersionManual = checkVersionManual;
+</script>
 
 <div class="loc-bar">
   <input type="text" id="loc-input" placeholder="Hae sijaintia..." value="Suomenlinna" />
