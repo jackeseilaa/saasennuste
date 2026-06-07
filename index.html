@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v2.3</title>
+<title>Purjehdussää v2.4</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.3</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.4</span>
 </div>
 
 <script>
@@ -291,7 +291,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.3';
+var APP_VERSION = 'v2.4';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -809,17 +809,34 @@ async function showRouteView(btn) {
     return (d - TODAY) / 86400000;
   }
 
+  // Hae kaikki mallit ENSIN 5 kiinteälle pisteelle (cache-optimoitu)
+  // Sitten interpoloi sijainnin mukaan — ei 168 API-kutsua
+  async function prefetchAllModels(dateKey, daysAhead) {
+    var anchors = ROUTE_WP; // 5 pistettä
+    var fetches = [];
+    anchors.forEach(function(wp) {
+      fetches.push(fetchModel(wp.lat, wp.lon, 'metno'));
+      fetches.push(fetchModel(wp.lat, wp.lon, 'ecmwf'));
+      fetches.push(fetchModel(wp.lat, wp.lon, 'icon'));
+    });
+    await Promise.allSettled(fetches); // kaikki kerralla, cache täyttyy
+  }
+
   async function buildLegRows(positions, dateKey, segs, startLat, startLon, cogDeg) {
     var daysAhead = daysUntil(dateKey);
+
+    // Esihae kaikki mallit rinnakkain
+    await prefetchAllModels(dateKey, daysAhead);
+
     var rows = [];
     var cumNM = 0;
     var startHour = positions[0].clockH;
 
-    for (var h = 0; h < 28; h++) {
-      if (cumNM > totalNM + 0.1) break;
+    for (var h = 0; h < 26; h++) {
+      if (cumNM >= totalNM) break;
 
-      // Laske sijainti kertyneen matkan perusteella
       var realCum = Math.min(cumNM, totalNM);
+      // posAtTime: speed=1.0, hours=distNM → distTarget = distNM ✓
       var pos = posAtTime(segs, 1.0, realCum);
       var clockH = (startHour + h) % 24;
       var posObj = {
@@ -830,38 +847,33 @@ async function showRouteView(btn) {
         arrived: realCum >= totalNM - 0.1
       };
 
-      // Hae sää tästä sijainnista
+      // Hae sää — nyt cache-hittiä, ei uusia API-kutsuja
       var wx = await getWeatherAtPoint(pos.lat, pos.lon, dateKey, clockH, daysAhead + h/24);
 
-      // Laske reititys tuulen perusteella
       var routing = null;
-      if (wx && wx.wd != null) {
+      if (wx && wx.wd != null && !isNaN(wx.wd)) {
         routing = routingCalc(wx.wd, cogDeg);
-        // Lisää VMG ja halssaustiedot wx-objektiin
         wx.routing = routing;
-        // Päivitä kertynyt matka VMG:n mukaan
         cumNM += routing.vmg;
       } else {
-        cumNM += 5.0; // fallback
+        cumNM += 5.0;
       }
 
       rows.push({ pos: posObj, wx: wx });
     }
 
-    // Lisää saapumisrivi jos ei vielä mukana
-    if (rows.length > 0 && !rows[rows.length-1].pos.arrived) {
-      var lastPos = posAtTime(segs, 1.0, totalNM);
-      var lastH = rows[rows.length-1].pos.h + 1;
-      rows.push({
-        pos: {
-          h: lastH, clockH: (startHour + lastH) % 24,
-          clockStr: String((startHour + lastH) % 24).padStart(2,'0') + ':00',
-          lat: lastPos.lat, lon: lastPos.lon, name: lastPos.name,
-          distFromStart: totalNM, arrived: true
-        },
-        wx: null
-      });
-    }
+    // Saapumisrivi
+    var lastPos = posAtTime(segs, 1.0, totalNM);
+    var lastH = rows.length > 0 ? rows[rows.length-1].pos.h + 1 : 12;
+    rows.push({
+      pos: {
+        h: lastH, clockH: (startHour + lastH) % 24,
+        clockStr: String((startHour + lastH) % 24).padStart(2,'0') + ':00',
+        lat: lastPos.lat, lon: lastPos.lon, name: lastPos.name,
+        distFromStart: totalNM, arrived: true
+      },
+      wx: null
+    });
     return rows;
   }
 
