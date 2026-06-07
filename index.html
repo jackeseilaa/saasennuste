@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v2.4</title>
+<title>Purjehdussää v2.5</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.4</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.5</span>
 </div>
 
 <script>
@@ -220,7 +220,11 @@ async function checkVersion(manual) {
         banner.id = 'update-banner';
         banner.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;';
         banner.innerHTML = '\u2B06\uFE0F Uusi versio ' + remoteVer + ' saatavilla \u2014 napauta ladataksesi';
-        banner.onclick = function(){ location.reload(true); };
+        banner.onclick = function(){
+          // Pakota cache-bust lisäämällä aikaleima URL:iin
+          var url = location.href.split('?')[0].split('#')[0];
+          location.href = url + '?v=' + Date.now();
+        };
         document.body.insertBefore(banner, document.body.firstChild);
       }
     } else {
@@ -291,7 +295,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.4';
+var APP_VERSION = 'v2.5';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -651,31 +655,39 @@ async function showRouteView(btn) {
   async function fetchModel(lat, lon, model) {
     var key = model + '_' + lat.toFixed(2) + '_' + lon.toFixed(2);
     if (forecastCache[key]) return forecastCache[key];
-    var baseUrl, url;
+    var url;
     if (model === 'metno') {
-      // MetNO Nordic API — 1 km, blendattu ECMWF:ään yli 2.5 vrk
       url = 'https://api.open-meteo.com/v1/metno'
         + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
         + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
         + '&windspeed_unit=ms&timezone=Europe/Helsinki&forecast_days=16';
     } else if (model === 'ecmwf') {
-      // ECMWF IFS 9 km — natiivi resoluutio, paras 3–15 vrk
       url = 'https://api.open-meteo.com/v1/ecmwf'
         + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
         + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
         + '&windspeed_unit=ms&timezone=Europe/Helsinki&forecast_days=15';
     } else {
-      // ICON-seamless — DWD 2 km paikallinen + globaali sulautuma
       url = 'https://api.open-meteo.com/v1/forecast'
         + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
         + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
         + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
     }
-    var r = await fetch(url);
-    var d = await r.json();
-    if (!d.hourly) throw new Error('Malli ' + model + ' ei vastannut');
-    forecastCache[key] = d;
-    return d;
+    // 10 s timeout — ei jää roikkumaan ikuisesti
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, 10000);
+    try {
+      var r = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      var d = await r.json();
+      if (!d.hourly) throw new Error('Malli ' + model + ' tyhj\u00e4');
+      forecastCache[key] = d;
+      return d;
+    } catch(e) {
+      clearTimeout(timer);
+      // Palauta tyhjä rakenne eikä heitä — muut mallit jatkavat
+      forecastCache[key] = null;
+      return null;
+    }
   }
 
   // Hae arvo tietystä mallista tietyllä ajalla
@@ -1154,15 +1166,19 @@ async function load() {
   if (cache[key]) { render(cache[key]); return; }
   document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">⧗</span><br><br>Ladataan ennustetta…</div>';
   try {
-    var r = await fetch(buildURL(lat, lon, curModel));
+    var controller = new AbortController();
+    var timer = setTimeout(function(){ controller.abort(); }, 12000);
+    var r = await fetch(buildURL(lat, lon, curModel), { signal: controller.signal });
+    clearTimeout(timer);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
     if (!d.current_weather) throw new Error('Tyhjä vastaus');
     cache[key] = d;
     render(d);
   } catch(e) {
+    var msg = e.name === 'AbortError' ? 'Aikakatkaisu — tarkista verkkoyhteys' : e.message;
     document.getElementById('main-content').innerHTML =
-      '<div class="err">Lataus epäonnistui<br><small>' + e.message + '</small><br>'
+      '<div class="err">Lataus epäonnistui<br><small>' + msg + '</small><br>'
       + '<button class="retry-btn" onclick="load()">↻ Yritä uudelleen</button></div>';
   }
 }
