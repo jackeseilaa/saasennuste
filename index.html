@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v2.1</title>
+<title>Purjehdussää v2.2</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.1</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()">v2.2</span>
 </div>
 
 <script>
@@ -291,7 +291,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.1';
+var APP_VERSION = 'v2.2';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -802,6 +802,9 @@ async function showRouteView(btn) {
     return;
   }
 
+  // Globaali rivitietojen säilytys napauttamista varten
+  window._routeRows = window._routeRows || {};
+
   function renderDynLeg(rows, legTitle, legDate) {
     var worstSi = { s:100, col:'#1a7a4a', bg:'#e6f4ec', lbl:'Kevyt' };
     rows.forEach(function(r) {
@@ -809,7 +812,7 @@ async function showRouteView(btn) {
     });
     var arrH = 9 + Math.floor(totalHours);
     var arrMin = Math.round((totalHours % 1) * 60);
-    var arrStr = String(arrH % 24).padStart(2,'0') + ':' + String(arrMin).padStart(2,'0');
+    var arrStr = String(arrH % 24).padStart(2,'00') + ':' + String(arrMin).padStart(2,'00');
 
     var html = '<div class="route-leg">'
       + '<div class="route-leg-head" onclick="toggleLeg(this)">'
@@ -820,7 +823,6 @@ async function showRouteView(btn) {
         + '<span class="route-leg-badge" style="color:' + worstSi.col + ';background:' + worstSi.bg + '">' + worstSi.lbl + '</span>'
       + '</div>'
       + '<div class="route-hours">'
-      // Column header
       + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:600;color:var(--muted);padding:5px 14px;gap:5px">'
         + '<span style="min-width:40px">KLO</span>'
         + '<span style="min-width:20px"></span>'
@@ -829,7 +831,7 @@ async function showRouteView(btn) {
         + '<span style="min-width:48px">PUUSKA</span>'
         + '<span style="min-width:70px">SUUNTA</span>'
         + '<span style="flex:1">SIJAINTI</span>'
-        + '<span style="min-width:40px;text-align:center">\u00b1</span>'
+        + '<span style="min-width:32px;text-align:center">\u00b1</span>'
         + '<span>KELI</span>'
       + '</div>';
 
@@ -846,23 +848,18 @@ async function showRouteView(btn) {
       var rowBg = isArr ? 'background:#eef8ee;' : '';
       var locLabel = isArr ? '\u2693\ufe0f ' + pos.name : '\u25b6 ' + pos.name;
 
-      // Spread-indikaattori: mallien välinen hajonta
-      var spreadHtml = '';
+      // Spread
       var sp = wx.spread || 0;
-      if (sp < 1.0) {
-        spreadHtml = '<span style="color:#1a7a4a;font-size:11px;font-weight:600" title="Mallien v\u00e4linen hajonta: ' + sp.toFixed(1) + ' m/s">\u2713</span>';
-      } else if (sp < 2.0) {
-        spreadHtml = '<span style="color:#b87c1a;font-size:11px;font-weight:600" title="Hajonta: ' + sp.toFixed(1) + ' m/s">\u007e</span>';
-      } else {
-        spreadHtml = '<span style="color:#b82222;font-size:11px;font-weight:600" title="Hajonta: ' + sp.toFixed(1) + ' m/s">\u26a0</span>';
-      }
+      var spreadIcon, spreadCol;
+      if (sp < 1.0)      { spreadIcon = '\u2713'; spreadCol = '#1a7a4a'; }
+      else if (sp < 2.0) { spreadIcon = '\u007e'; spreadCol = '#b87c1a'; }
+      else               { spreadIcon = '\u26a0'; spreadCol = '#b82222'; }
 
-      // Mallivertailu tooltip
-      var srcTitle = 'MetNO:' + (wx.wsMetno!=null?Math.round(wx.wsMetno):'?')
-        + ' ECMWF:' + (wx.wsEcmwf!=null?Math.round(wx.wsEcmwf):'?')
-        + ' ICON:' + (wx.wsIcon!=null?Math.round(wx.wsIcon):'?') + ' m/s';
+      // Tallenna tiedot modaliin
+      var rowKey = 'rr_' + Math.random().toString(36).slice(2,8);
+      window._routeRows[rowKey] = { pos:pos, wx:wx, si:si };
 
-      html += '<div class="rhr" style="' + rowBg + 'gap:5px" title="' + srcTitle + '">'
+      html += '<div class="rhr" style="' + rowBg + 'gap:5px;cursor:pointer" onclick="showRouteRowDetail(\'' + rowKey + '\')">'
         + '<span class="rhr-time">' + pos.clockStr + '</span>'
         + '<span class="rhr-wmo" style="min-width:20px">' + (WI[wx.wc]||'\ud83c\udf21') + '</span>'
         + '<span class="rhr-temp" style="min-width:30px">' + Math.round(wx.temp) + '\u00b0</span>'
@@ -872,7 +869,7 @@ async function showRouteView(btn) {
         + '<span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
           + locLabel + '<span style="color:#c0c8d4"> \u00b7 ' + pos.distFromStart.toFixed(0) + ' M</span>'
         + '</span>'
-        + '<span style="min-width:40px;text-align:center">' + spreadHtml + '</span>'
+        + '<span style="min-width:32px;text-align:center;font-size:13px;font-weight:700;color:' + spreadCol + '">' + spreadIcon + '</span>'
         + '<span class="rhr-sail" style="color:' + si.col + ';background:' + si.bg + ';white-space:nowrap">'
           + si.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
         + '</div>';
@@ -880,6 +877,7 @@ async function showRouteView(btn) {
     html += '</div></div>';
     return html;
   }
+
 
   var fmiHtml = fmiObs && !isNaN(fmiObs.windspeed)
     ? '<div class="fmi-obs-card"><div class="fmi-obs-title"><span class="fmi-live"></span> FMI Harmaja \u2013 mitattu '
@@ -901,7 +899,7 @@ async function showRouteView(btn) {
       + '<span style="color:#1a7a4a;font-weight:600">\u2713</span> mallien v\u00e4linen hajonta alle 1 m/s (luotettava) &nbsp;\u00b7&nbsp; '
       + '<span style="color:#b87c1a;font-weight:600">\u007e</span> hajonta 1\u20132 m/s (kohtalainen) &nbsp;\u00b7&nbsp; '
       + '<span style="color:#b82222;font-weight:600">\u26a0</span> hajonta yli 2 m/s (ep\u00e4varma) &nbsp;\u00b7&nbsp; '
-      + 'Vie hiiren rivin p\u00e4\u00e4lle n\u00e4hd\u00e4ksesi mallien yksitt\u00e4iset arvot'
+      + 'Napauta rivi\u00e4 n\u00e4hd\u00e4ksesi mallien yksitt\u00e4iset arvot ja ennustevarmuus'
     + '</div>'
     + fmiHtml
     + '<div class="sec-label">Mennessä \u00b7 Pe 12.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
@@ -1115,6 +1113,59 @@ window.showHourDetail = showHourDetail;
 window.showDayHours = showDayHours;
 window.showRouteView = showRouteView;
 window.toggleLeg = toggleLeg;
+
+// Reittirivin napauttaminen → modal mallitiedoilla
+window.showRouteRowDetail = function(key) {
+  var d = window._routeRows && window._routeRows[key];
+  if (!d) return;
+  var pos = d.pos, wx = d.wx, si = d.si;
+  var ws = Math.round(wx.ws), gust = Math.round(wx.gust);
+  var sp = wx.spread || 0;
+  var spreadTxt = sp < 1 ? 'Hyvä (<1 m/s)' : sp < 2 ? 'Kohtalainen ('+sp.toFixed(1)+' m/s)' : 'Epävarma ('+sp.toFixed(1)+' m/s)';
+  var spreadCol = sp < 1 ? '#1a7a4a' : sp < 2 ? '#b87c1a' : '#b82222';
+
+  function modelRow(name, val, weight) {
+    if (val == null) return '';
+    var bar = Math.round(val / 20 * 100);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
+      + '<span style="font-size:12px;font-weight:600;min-width:56px;color:var(--ocean)">' + name + '</span>'
+      + '<span style="font-size:16px;font-weight:700;min-width:44px">' + Math.round(val) + ' m/s</span>'
+      + '<div style="flex:1;height:6px;background:#e8edf2;border-radius:3px">'
+        + '<div style="width:' + Math.min(bar,100) + '%;height:100%;background:var(--ocean);border-radius:3px"></div>'
+      + '</div>'
+      + '<span style="font-size:10px;color:var(--muted);min-width:28px;text-align:right">' + Math.round(weight*100) + '%</span>'
+    + '</div>';
+  }
+
+  var daysAhead = (new Date('2026-06-07') - new Date()) / -86400000 + pos.h/24;
+  var wMetno, wEcmwf, wIcon;
+  if (daysAhead <= 2.5)     { wMetno=0.50; wEcmwf=0.30; wIcon=0.20; }
+  else if (daysAhead <= 5)  { wMetno=0.30; wEcmwf=0.50; wIcon=0.20; }
+  else                       { wMetno=0.20; wEcmwf=0.60; wIcon=0.20; }
+
+  var html =
+    '<div class="sail-detail-box" style="background:' + si.bg + ';margin-bottom:14px">'
+      + '<div style="font-size:11px;color:' + si.col + ';margin-bottom:4px">' + pos.clockStr + ' · ' + pos.name + ' · ' + pos.distFromStart.toFixed(0) + ' M</div>'
+      + '<div class="sail-detail-score" style="color:' + si.col + '">' + si.s + '<span style="font-size:18px">/100</span></div>'
+      + '<div class="sail-detail-name" style="color:' + si.col + '">' + si.lbl + '</div>'
+    + '</div>'
+    + '<div class="hd-grid" style="margin-bottom:14px">'
+      + '<div class="hd-stat"><div class="hd-stat-l">💨 Konsensus</div><div class="hd-stat-v">' + ws + '<span class="hd-stat-u"> m/s</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">💥 Puuskat</div><div class="hd-stat-v">' + gust + '<span class="hd-stat-u"> m/s</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">🧭 Suunta</div><div class="hd-stat-v">' + Math.round(wx.wd) + '<span class="hd-stat-u">° ' + dirCard(wx.wd) + '</span></div></div>'
+      + '<div class="hd-stat"><div class="hd-stat-l">🌡 Lämpötila</div><div class="hd-stat-v">' + Math.round(wx.temp) + '<span class="hd-stat-u">°C</span></div></div>'
+    + '</div>'
+    + '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Mallien yksittäiset tuuliarvot</div>'
+    + modelRow('MetNO', wx.wsMetno, wMetno)
+    + modelRow('ECMWF', wx.wsEcmwf, wEcmwf)
+    + modelRow('ICON', wx.wsIcon, wIcon)
+    + '<div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:13px">'
+      + '<strong style="color:' + spreadCol + '">Ennustevarmuus: ' + spreadTxt + '</strong><br>'
+      + '<span style="color:var(--muted);font-size:12px">Mallien välinen hajonta tuulessa. Mitä pienempi, sitä luotettavampi ennuste.</span>'
+    + '</div>';
+
+  openModal(pos.clockStr + ' — ' + pos.name, html);
+};
 
 document.getElementById('loc-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchLoc(); });
 
