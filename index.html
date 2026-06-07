@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Purjehdussää v1.9</title>
+<title>Purjehdussää v2.0</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -184,7 +184,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version">v1.9</span>
+  <span class="version">v2.0</span>
 </div>
 
 <div class="loc-bar">
@@ -237,7 +237,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-var APP_VERSION = 'v1.9';
+var APP_VERSION = 'v2.0';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -460,186 +460,233 @@ async function fetchFMIobs() {
   } catch(e) { return null; }
 }
 
+// ── ROUTE MATH ────────────────────────────────────────────
+function haversineNM(la1, lo1, la2, lo2) {
+  var R = 3440.065;
+  var phi1 = la1*Math.PI/180, phi2 = la2*Math.PI/180;
+  var dp = (la2-la1)*Math.PI/180, dl = (lo2-lo1)*Math.PI/180;
+  var a = Math.sin(dp/2)*Math.sin(dp/2) + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function bearingDeg(la1, lo1, la2, lo2) {
+  var phi1=la1*Math.PI/180, phi2=la2*Math.PI/180, dl=(lo2-lo1)*Math.PI/180;
+  var x=Math.sin(dl)*Math.cos(phi2), y=Math.cos(phi1)*Math.sin(phi2)-Math.sin(phi1)*Math.cos(phi2)*Math.cos(dl);
+  return (Math.atan2(x,y)*180/Math.PI+360)%360;
+}
+
+// Route waypoints (in order HKI→TLN)
+var ROUTE_WP = [
+  { name:'Harmaja',          lat:60.1054, lon:24.9757 },
+  { name:'Porkkala',         lat:59.9841, lon:24.3979 },
+  { name:'Suomenlahti keski',lat:59.7500, lon:24.6000 },
+  { name:'Naissaari',        lat:59.5600, lon:24.5200 },
+  { name:'Tallinna/Pirita',  lat:59.4627, lon:24.8328 }
+];
+
+function buildRouteSegments(wps) {
+  var segs = [];
+  for (var i = 0; i < wps.length-1; i++) {
+    var d = haversineNM(wps[i].lat, wps[i].lon, wps[i+1].lat, wps[i+1].lon);
+    var brg = bearingDeg(wps[i].lat, wps[i].lon, wps[i+1].lat, wps[i+1].lon);
+    segs.push({ from:wps[i], to:wps[i+1], dist:d, brg:brg });
+  }
+  return segs;
+}
+
+function posAtTime(segs, speedKts, hoursFromStart) {
+  var distTarget = hoursFromStart * speedKts;
+  var cum = 0;
+  for (var i = 0; i < segs.length; i++) {
+    var seg = segs[i];
+    if (cum + seg.dist >= distTarget) {
+      var frac = (distTarget - cum) / seg.dist;
+      var lat = seg.from.lat + frac*(seg.to.lat - seg.from.lat);
+      var lon = seg.from.lon + frac*(seg.to.lon - seg.from.lon);
+      var name;
+      if (frac < 0.12) name = seg.from.name;
+      else if (frac > 0.88) name = seg.to.name;
+      else name = seg.from.name + ' \u2192 ' + seg.to.name;
+      return { lat:lat, lon:lon, name:name, dist: cum+distTarget-cum, arrived:false };
+    }
+    cum += seg.dist;
+  }
+  var last = segs[segs.length-1];
+  return { lat:last.to.lat, lon:last.to.lon, name:last.to.name, arrived:true };
+}
+
+function totalDist(segs) {
+  return segs.reduce(function(s,seg){ return s+seg.dist; }, 0);
+}
+
 // ── ROUTE VIEW ────────────────────────────────────────────
 async function showRouteView(btn) {
   routeMode = true;
   document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  document.getElementById('loc-input').value = 'Helsinki → Tallinna reitti';
-  document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">⧗</span><br><br>Ladataan reittiennustetta…</div>';
+  document.getElementById('loc-input').value = 'Helsinki \u2192 Tallinna reitti';
+  document.getElementById('main-content').innerHTML = '<div class="loading"><span class="spin">\u29d7</span><br><br>Ladataan reittiennustetta\u2026</div>';
 
-  // Fetch data for 4 key points: HKI, mid-gulf, Naissaari, TLN
-  var points = [
-    { name:'Helsinki / Harmaja', lat:60.1054, lon:24.9757 },
-    { name:'Suomenlahti (keski)', lat:59.7500, lon:24.6000 },
-    { name:'Naissaari (Viro)', lat:59.5600, lon:24.5200 },
-    { name:'Tallinna / Pirita', lat:59.4627, lon:24.8328 }
-  ];
+  var SPEED_KTS = 5.0;
+  var segsAB = buildRouteSegments(ROUTE_WP);
+  var segsBA = buildRouteSegments(ROUTE_WP.slice().reverse());
+  var totalNM = totalDist(segsAB);
+  var totalHours = totalNM / SPEED_KTS;
 
-  var legs = [
-    { 
-      name:'Lähtö: Helsinki → Tallinna',
-      date:'Pe 12.6.2026', dateKey:'2026-06-12',
-      startH: 5, endH: 18,
-      ptOrder: [0, 1, 2, 3]  // HKI → mid → Naissaari → TLN
-    },
-    {
-      name:'Paluu: Tallinna → Helsinki',
-      date:'Su 14.6.2026', dateKey:'2026-06-14',
-      startH: 5, endH: 18,
-      ptOrder: [3, 2, 1, 0]  // TLN → Naissaari → mid → HKI
+  function buildHourlyPositions(segs, dateKey, startHour) {
+    var positions = [];
+    for (var h = 0; h <= Math.ceil(totalHours) + 1; h++) {
+      var pos = posAtTime(segs, SPEED_KTS, h);
+      var absHour = startHour + h;
+      var clockH = absHour % 24;
+      positions.push({
+        h: h, clockH: clockH,
+        clockStr: String(clockH).padStart(2,'0') + ':00',
+        lat: pos.lat, lon: pos.lon, name: pos.name,
+        distFromStart: h * SPEED_KTS, arrived: pos.arrived
+      });
     }
-  ];
+    return positions;
+  }
 
-  async function getPoint(la, lo) {
+  var positionsAB = buildHourlyPositions(segsAB, '2026-06-12', 9);
+  var positionsBA = buildHourlyPositions(segsBA, '2026-06-14', 9);
+
+  var forecastCache = {};
+  async function getForecast(lat, lon) {
+    var key = lat.toFixed(2) + '_' + lon.toFixed(2);
+    if (forecastCache[key]) return forecastCache[key];
     var url = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=' + la + '&longitude=' + lo
+      + '?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4)
       + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-      + '&current_weather=true&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
+      + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
     var r = await fetch(url);
-    return await r.json();
+    var d = await r.json();
+    forecastCache[key] = d;
+    return d;
   }
 
-  var results;
-  try {
-    results = await Promise.all(points.map(function(p){ return getPoint(p.lat, p.lon); }));
-  } catch(e) {
-    document.getElementById('main-content').innerHTML = '<div class="err">Lataus epäonnistui<br><small>' + e.message + '</small><br><button class="retry-btn" onclick="showRouteView(null)">↻ Yritä uudelleen</button></div>';
-    return;
-  }
-
-  // FMI live obs (Harmaja fmisid=100539)
-  var fmiObs = await fetchFMIobs();
-
-  // EMHI (Viron ilmatieteen laitos) Naissaari obs via Open-Meteo current
-  async function fetchNaissaariObs() {
-    try {
-      var url = 'https://api.open-meteo.com/v1/forecast'
-        + '?latitude=59.5600&longitude=24.5200'
-        + '&current=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-        + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=1';
-      var r = await fetch(url);
-      var d = await r.json();
-      return d.current || null;
-    } catch(e) { return null; }
-  }
-  var naissaariObs = await fetchNaissaariObs();
-
-  function getHours(data, dateKey, fromH, toH) {
-    var H = data.hourly;
-    var rows = [];
+  async function getWeatherAtPoint(lat, lon, dateKey, clockH) {
+    var d = await getForecast(lat, lon);
+    var H = d.hourly;
+    var target = dateKey + 'T' + String(clockH).padStart(2,'0') + ':00';
     for (var i = 0; i < H.time.length; i++) {
-      var t = new Date(H.time[i]);
-      // Compare date in Helsinki time
-      var y = t.getFullYear(), mo = String(t.getMonth()+1).padStart(2,'0'), dd = String(t.getDate()).padStart(2,'0');
-      var tDate = y + '-' + mo + '-' + dd;
-      var tHour = t.getHours();
-      if (tDate === dateKey && tHour >= fromH && tHour <= toH) {
-        rows.push({
-          hour: tHour,
+      if (H.time[i] === target) {
+        return {
           ws: Math.round(H.windspeed_10m[i]),
           wd: H.winddirection_10m[i],
           gust: Math.round(H.windgusts_10m[i] || H.windspeed_10m[i]),
           temp: Math.round(H.temperature_2m[i]),
           wc: H.weathercode[i]
-        });
+        };
       }
+    }
+    return null;
+  }
+
+  var fmiObs = await fetchFMIobs();
+
+  async function buildLegRows(positions, dateKey) {
+    var rows = [];
+    for (var i = 0; i < positions.length; i++) {
+      var pos = positions[i];
+      var wx = await getWeatherAtPoint(pos.lat, pos.lon, dateKey, pos.clockH);
+      rows.push({ pos: pos, wx: wx });
     }
     return rows;
   }
 
-  function renderLeg(leg) {
-    // Build ordered point rows using ptOrder
-    var ptRows = leg.ptOrder.map(function(pi) {
-      return { name: points[pi].name, rows: getHours(results[pi], leg.dateKey, leg.startH, leg.endH) };
+  document.getElementById('main-content').innerHTML =
+    '<div class="loading"><span class="spin">\u29d7</span><br><br>Haetaan s\u00e4\u00e4data Quartetin sijainnista\u2026<br>'
+    + '<small style="color:var(--muted)">2 matkaa \u00d7 ' + (Math.ceil(totalHours)+2) + ' pistett\u00e4 = ICON-D2 haut</small></div>';
+
+  var rowsAB, rowsBA;
+  try {
+    rowsAB = await buildLegRows(positionsAB, '2026-06-12');
+    rowsBA = await buildLegRows(positionsBA, '2026-06-14');
+  } catch(e) {
+    document.getElementById('main-content').innerHTML =
+      '<div class="err">Lataus ep\u00e4onnistui<br><small>' + e.message + '</small><br>'
+      + '<button class="retry-btn" onclick="showRouteView(null)">\u21bb Yrit\u00e4 uudelleen</button></div>';
+    return;
+  }
+
+  function renderDynLeg(rows, legTitle, legDate) {
+    var worstSi = { s:100, col:'#1a7a4a', bg:'#e6f4ec', lbl:'Kevyt' };
+    rows.forEach(function(r) {
+      if (r.wx) { var si = sailCalc(r.wx.ws, r.wx.gust); if (si.s < worstSi.s) worstSi = si; }
     });
+    var arrH = 9 + Math.floor(totalHours);
+    var arrMin = Math.round((totalHours % 1) * 60);
+    var arrStr = String(arrH % 24).padStart(2,'0') + ':' + String(arrMin).padStart(2,'0');
 
-    function worstSail(rowsArr) {
-      var worst = { s:100, lbl:'Kevyt', col:'#1a7a4a', bg:'#e6f4ec' };
-      rowsArr.forEach(function(pr) {
-        pr.rows.forEach(function(r) {
-          var si = sailCalc(r.ws, r.gust);
-          if (si.s < worst.s) worst = si;
-        });
-      });
-      return worst;
-    }
-
-    var overall = worstSail(ptRows);
-
-    function renderPoint(ptName, rows, sparse) {
-      if (!rows.length) return '<div style="padding:10px 14px;color:var(--muted);font-size:13px">Ei dataa (' + ptName + ')</div>';
-      var out = '<div class="route-waypoint"><span class="route-wp-dot"></span>' + ptName + '</div>';
-      rows.forEach(function(r) {
-        if (sparse && r.hour % 2 !== 0) return; // every 2h for mid-points
-        var si = sailCalc(r.ws, r.gust);
-        var hh = String(r.hour).padStart(2,'0') + ':00';
-        out += '<div class="rhr">'
-          + '<span class="rhr-time">' + hh + '</span>'
-          + '<span class="rhr-wmo">' + (WI[r.wc]||'🌡') + '</span>'
-          + '<span class="rhr-temp">' + r.temp + '°</span>'
-          + '<span class="rhr-wind">' + r.ws + ' m/s</span>'
-          + '<span class="rhr-gust">↑' + r.gust + ' m/s</span>'
-          + '<span class="rhr-dir">' + dirArrow(r.wd, 14) + ' ' + Math.round(r.wd) + '° ' + dirCard(r.wd) + '</span>'
-          + '<span class="rhr-sail" style="color:' + si.col + ';background:' + si.bg + '">' + si.lbl.replace(' ⭐','⭐').replace(' ⚡','⚡') + '</span>'
-          + '</div>';
-      });
-      return out;
-    }
-
-    var body = '';
-    ptRows.forEach(function(pr, idx) {
-      // first and last point full detail, middle points sparse
-      var isMid = (idx > 0 && idx < ptRows.length - 1);
-      body += renderPoint(pr.name, pr.rows, isMid);
-    });
-
-    return '<div class="route-leg">'
+    var html = '<div class="route-leg">'
       + '<div class="route-leg-head" onclick="toggleLeg(this)">'
         + '<div>'
-          + '<div class="route-leg-name">' + leg.name + '</div>'
-          + '<div class="route-leg-date">' + leg.date + ' · klo 05–18</div>'
+          + '<div class="route-leg-name">' + legTitle + '</div>'
+          + '<div class="route-leg-date">' + legDate + ' \u00b7 L\u00e4ht\u00f6 09:00 \u2192 ~' + arrStr + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ' + SPEED_KTS + ' kts</div>'
         + '</div>'
-        + '<span class="route-leg-badge" style="color:' + overall.col + ';background:' + overall.bg + '">' + overall.lbl + '</span>'
+        + '<span class="route-leg-badge" style="color:' + worstSi.col + ';background:' + worstSi.bg + '">' + worstSi.lbl + '</span>'
       + '</div>'
-      + '<div class="route-hours">' + body + '</div>'
-    + '</div>';
+      + '<div class="route-hours">'
+      + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:600;color:var(--muted);padding:5px 14px;gap:6px">'
+        + '<span style="min-width:40px">KLO</span>'
+        + '<span style="min-width:20px"></span>'
+        + '<span style="min-width:32px">\u00b0C</span>'
+        + '<span style="min-width:54px">TUULI</span>'
+        + '<span style="min-width:50px">PUUSKA</span>'
+        + '<span style="min-width:72px">SUUNTA</span>'
+        + '<span style="flex:1">SIJAINTI / MATKA</span>'
+        + '<span>KELI</span>'
+      + '</div>';
+
+    rows.forEach(function(row) {
+      var pos = row.pos;
+      var wx = row.wx;
+      if (!wx) return;
+      if (pos.arrived && pos.distFromStart > totalNM + 1) return;
+      var si = sailCalc(wx.ws, wx.gust);
+      var isArr = pos.arrived || (pos.distFromStart >= totalNM - 0.5);
+      var rowBg = isArr ? 'background:#eef8ee;' : '';
+      var locLabel = isArr ? '\u2693\ufe0f ' + pos.name : '\u25b6 ' + pos.name;
+      html += '<div class="rhr" style="' + rowBg + 'gap:6px">'
+        + '<span class="rhr-time">' + pos.clockStr + '</span>'
+        + '<span class="rhr-wmo" style="min-width:20px">' + (WI[wx.wc]||'\ud83c\udf21') + '</span>'
+        + '<span class="rhr-temp" style="min-width:32px">' + wx.temp + '\u00b0</span>'
+        + '<span class="rhr-wind" style="min-width:54px">' + wx.ws + ' m/s</span>'
+        + '<span class="rhr-gust" style="min-width:50px">\u2191' + wx.gust + ' m/s</span>'
+        + '<span class="rhr-dir" style="min-width:72px">' + dirArrow(wx.wd, 13) + ' ' + Math.round(wx.wd) + '\u00b0 ' + dirCard(wx.wd) + '</span>'
+        + '<span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
+          + locLabel + '<span style="color:#c0c8d4"> \u00b7 ' + pos.distFromStart.toFixed(0) + ' M</span>'
+        + '</span>'
+        + '<span class="rhr-sail" style="color:' + si.col + ';background:' + si.bg + ';white-space:nowrap">'
+          + si.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
+        + '</div>';
+    });
+    html += '</div></div>';
+    return html;
   }
 
-  // Build live obs HTML — Harmaja (FMI) + Naissaari (ICON current)
-  function obsCard(title, obs, isIcon) {
-    if (!obs) return '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">⚠️ ' + title + ' – ei saatavilla</div></div>';
-    var ws = isIcon ? obs.windspeed_10m : obs.windspeed;
-    var wg = isIcon ? obs.windgusts_10m : obs.windgust;
-    var wd = isIcon ? obs.winddirection_10m : obs.winddirection;
-    var tStr = '';
-    if (!isIcon && obs.time) tStr = ' – mitattu ' + obs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
-    if (isNaN(ws)) return '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">⚠️ ' + title + ' – ei saatavilla</div></div>';
-    return '<div class="fmi-obs-card">'
-      + '<div class="fmi-obs-title"><span class="fmi-live"></span> ' + title + tStr + '</div>'
+  var fmiHtml = fmiObs && !isNaN(fmiObs.windspeed)
+    ? '<div class="fmi-obs-card"><div class="fmi-obs-title"><span class="fmi-live"></span> FMI Harmaja \u2013 mitattu '
+        + (fmiObs.time ? fmiObs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) : '') + '</div>'
       + '<div class="fmi-obs-grid">'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💨 Tuuli</div><div class="fmi-obs-v">' + Number(ws).toFixed(1) + '<span class="fmi-obs-u"> m/s</span></div></div>'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">💥 Puuska</div><div class="fmi-obs-v">' + (wg?Number(wg).toFixed(1):'–') + '<span class="fmi-obs-u"> m/s</span></div></div>'
-        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">🧭 Suunta</div><div class="fmi-obs-v">' + (wd?Math.round(wd)+'<span class="fmi-obs-u">° '+dirCard(wd)+'</span>':'–') + '</div></div>'
-      + '</div>'
-    + '</div>';
-  }
-
-  var obsHtml = obsCard('FMI Harmaja (lähtöpiste)', fmiObs, false)
-              + obsCard('Naissaari – ICON nykyhetki', naissaariObs, true);
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">\ud83d\udca8 Tuuli</div><div class="fmi-obs-v">' + fmiObs.windspeed.toFixed(1) + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">\ud83d\udca5 Puuska</div><div class="fmi-obs-v">' + (isNaN(fmiObs.windgust)?'\u2013':fmiObs.windgust.toFixed(1)) + '<span class="fmi-obs-u"> m/s</span></div></div>'
+        + '<div class="fmi-obs-stat"><div class="fmi-obs-l">\ud83e\uddad Suunta</div><div class="fmi-obs-v">' + (isNaN(fmiObs.winddirection)?'\u2013':Math.round(fmiObs.winddirection)+'\u00b0 '+dirCard(fmiObs.winddirection)) + '</div></div>'
+      + '</div></div>'
+    : '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">\u26a0\ufe0f FMI Harmaja \u2013 ei saatavilla juuri nyt</div></div>';
 
   document.getElementById('main-content').innerHTML =
     '<div class="route-header">'
-      + '<div class="route-title">⛵ Helsinki – Tallinna reitti</div>'
-      + '<div class="route-sub">ICON-D2 ennuste · 12.6. lähtö &amp; 14.6. paluu · 4 pistettä</div>'
+      + '<div class="route-title">\u26f5 Helsinki \u2013 Tallinna \u00b7 Dynaaminen reittiennuste</div>'
+      + '<div class="route-sub">S\u00e4\u00e4 Quartetin sijainnista joka tunnilla \u00b7 ' + SPEED_KTS + ' kts \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ~' + totalHours.toFixed(1) + ' h</div>'
     + '</div>'
-    + obsHtml
-    + '<div class="sec-label">Reittiennuste purjeittain</div>'
-    + '<div class="route-legs">'
-      + renderLeg(legs[0])
-      + renderLeg(legs[1])
-    + '</div>'
-    + '<div class="update-info">Lähde: ICON-D2 (Open-Meteo) · FMI WFS · ' + APP_VERSION + '</div>';
+    + fmiHtml
+    + '<div class="sec-label">Mennen \u00b7 Pe 12.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
+    + renderDynLeg(rowsAB, 'L\u00e4ht\u00f6: Helsinki \u2192 Tallinna', 'Pe 12.6.2026')
+    + '<div class="sec-label" style="margin-top:16px">Paluussa \u00b7 Su 14.6. \u00b7 L\u00e4ht\u00f6 09:00</div>'
+    + renderDynLeg(rowsBA, 'Paluu: Tallinna \u2192 Helsinki', 'Su 14.6.2026')
+    + '<div class="update-info">ICON-D2 (Open-Meteo) \u00b7 FMI WFS \u00b7 S\u00e4\u00e4 interpoloitu Quartetin sijainnista joka tunnille \u00b7 ' + APP_VERSION + '</div>';
 }
 
 function toggleLeg(el) {
