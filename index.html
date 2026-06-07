@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v2.9</title>
+<title>Purjehdussää v3.0</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -187,7 +187,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v2.9</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.0</span>
 </div>
 
 <script>
@@ -286,7 +286,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v2.9';
+var APP_VERSION = 'v3.0';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -1261,7 +1261,7 @@ window.showDayHours = showDayHours;
 window.showRouteView = showRouteView;
 window.toggleLeg = toggleLeg;
 
-// Reittirivin napauttaminen → modal mallitiedoilla
+// Reittirivin napauttaminen -> modal mallitiedoilla
 window.showRouteRowDetail = function(key) {
   var d = window._routeRows && window._routeRows[key];
   if (!d) return;
@@ -1283,40 +1283,23 @@ window.showRouteRowDetail = function(key) {
     + '</div>';
   }
 
-  var daysAhead = 5;
   var wM = 0.20, wE = 0.60, wI = 0.20;
-
-  // Navigaatioboksi
   var navHtml = '';
   if (routing) {
     if (routing.mode === 'beat') {
       navHtml = '<div style="background:#fff8e8;border:2px solid #f0c040;border-radius:10px;padding:14px;margin-bottom:14px">'
         + '<div style="font-size:13px;font-weight:700;color:#b87c1a;margin-bottom:8px">\u26f5 HALSSAUS TARPEEN</div>'
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px">'
-            + '<div style="font-size:10px;color:#b87c1a">SB-halssi</div>'
-            + '<div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.tack1 + '\u00b0</div>'
-            + '<div style="font-size:11px;color:var(--muted)">' + dirCard(routing.tack1) + '</div>'
-          + '</div>'
-          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px">'
-            + '<div style="font-size:10px;color:#b87c1a">BB-halssi</div>'
-            + '<div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.tack2 + '\u00b0</div>'
-            + '<div style="font-size:11px;color:var(--muted)">' + dirCard(routing.tack2) + '</div>'
-          + '</div>'
-          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px">'
-            + '<div style="font-size:10px;color:#b87c1a">VMG eteenp\u00e4in</div>'
-            + '<div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.vmg.toFixed(1) + ' kts</div>'
-          + '</div>'
-          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px">'
-            + '<div style="font-size:10px;color:#b87c1a">Lisämatka</div>'
-            + '<div style="font-size:20px;font-weight:700;color:#0a4272">' + (routing.extraFactor ? (routing.extraFactor*100-100).toFixed(0)+'%' : '') + '</div>'
-          + '</div>'
+          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">SB-halssi</div><div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.tack1 + '\u00b0</div><div style="font-size:11px;color:var(--muted)">' + dirCard(routing.tack1) + '</div></div>'
+          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">BB-halssi</div><div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.tack2 + '\u00b0</div><div style="font-size:11px;color:var(--muted)">' + dirCard(routing.tack2) + '</div></div>'
+          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">VMG eteenp\u00e4in</div><div style="font-size:20px;font-weight:700;color:#0a4272">' + routing.vmg.toFixed(1) + ' kts</div></div>'
+          + '<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">Lis\u00e4matka</div><div style="font-size:20px;font-weight:700;color:#0a4272">' + (routing.extraFactor?(routing.extraFactor*100-100).toFixed(0)+'%':'') + '</div></div>'
         + '</div>'
-        + '<div style="margin-top:8px;font-size:11px;color:#8a6a20">TWA=' + Math.round(routing.twa) + '\u00b0 · max. nousukulma ' + Q.TWA_MAX + '\u00b0 · nopeus nousussa ' + Q.SPD_CLOSE + ' kts</div>'
+        + '<div style="margin-top:8px;font-size:11px;color:#8a6a20">TWA=' + Math.round(routing.twa) + '\u00b0 \u00b7 max. nousukulma ' + Q.TWA_MAX + '\u00b0 \u00b7 nopeus ' + Q.SPD_CLOSE + ' kts</div>'
       + '</div>';
     } else {
       navHtml = '<div style="background:#e8f4ec;border:1px solid #a0d4b0;border-radius:10px;padding:12px;margin-bottom:14px">'
-        + '<div style="font-size:13px;font-weight:700;color:#1a7a4a;margin-bottom:4px">\u2714 Vapaatuuli \u2014 suorakurssi</div>'
+        + '<div style="font-size:13px;font-weight:700;color:#1a7a4a">\u2714 Vapaatuuli \u2014 suorakurssi</div>'
         + '<div style="font-size:12px;color:#1a7a4a">TWA ' + Math.round(routing.twa) + '\u00b0 \u00b7 nopeus ' + routing.speed.toFixed(1) + ' kts</div>'
       + '</div>';
     }
@@ -1334,58 +1317,15 @@ window.showRouteRowDetail = function(key) {
       + '<div class="hd-stat"><div class="hd-stat-l">\ud83e\uddad Suunta</div><div class="hd-stat-v">' + Math.round(wx.wd) + '<span class="hd-stat-u">\u00b0 ' + dirCard(wx.wd) + '</span></div></div>'
       + '<div class="hd-stat"><div class="hd-stat-l">\ud83c\udf21 L\u00e4mp\u00f6</div><div class="hd-stat-v">' + Math.round(wx.temp) + '<span class="hd-stat-u">\u00b0C</span></div></div>'
     + '</div>'
-    + '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Mallien tuuliarvot</div>'
+    + '<div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">MALLIEN TUULIARVOT</div>'
     + modelRow('MetNO', wx.wsMetno, wM)
     + modelRow('ECMWF', wx.wsEcmwf, wE)
     + modelRow('ICON', wx.wsIcon, wI)
-    + '<div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:13px">'
+    + '<div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px">'
       + '<strong style="color:' + spreadCol + '">Ennustevarmuus: ' + spreadTxt + '</strong>'
     + '</div>';
 
   openModal(pos.clockStr + ' \u2014 ' + pos.name, html);
-};
-
-  function modelRow(name, val, weight) {
-    if (val == null) return '';
-    var bar = Math.round(val / 20 * 100);
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
-      + '<span style="font-size:12px;font-weight:600;min-width:56px;color:var(--ocean)">' + name + '</span>'
-      + '<span style="font-size:16px;font-weight:700;min-width:44px">' + Math.round(val) + ' m/s</span>'
-      + '<div style="flex:1;height:6px;background:#e8edf2;border-radius:3px">'
-        + '<div style="width:' + Math.min(bar,100) + '%;height:100%;background:var(--ocean);border-radius:3px"></div>'
-      + '</div>'
-      + '<span style="font-size:10px;color:var(--muted);min-width:28px;text-align:right">' + Math.round(weight*100) + '%</span>'
-    + '</div>';
-  }
-
-  var daysAhead = (new Date('2026-06-07') - new Date()) / -86400000 + pos.h/24;
-  var wMetno, wEcmwf, wIcon;
-  if (daysAhead <= 2.5)     { wMetno=0.50; wEcmwf=0.30; wIcon=0.20; }
-  else if (daysAhead <= 5)  { wMetno=0.30; wEcmwf=0.50; wIcon=0.20; }
-  else                       { wMetno=0.20; wEcmwf=0.60; wIcon=0.20; }
-
-  var html =
-    '<div class="sail-detail-box" style="background:' + si.bg + ';margin-bottom:14px">'
-      + '<div style="font-size:11px;color:' + si.col + ';margin-bottom:4px">' + pos.clockStr + ' · ' + pos.name + ' · ' + pos.distFromStart.toFixed(0) + ' M</div>'
-      + '<div class="sail-detail-score" style="color:' + si.col + '">' + si.s + '<span style="font-size:18px">/100</span></div>'
-      + '<div class="sail-detail-name" style="color:' + si.col + '">' + si.lbl + '</div>'
-    + '</div>'
-    + '<div class="hd-grid" style="margin-bottom:14px">'
-      + '<div class="hd-stat"><div class="hd-stat-l">💨 Konsensus</div><div class="hd-stat-v">' + ws + '<span class="hd-stat-u"> m/s</span></div></div>'
-      + '<div class="hd-stat"><div class="hd-stat-l">💥 Puuskat</div><div class="hd-stat-v">' + gust + '<span class="hd-stat-u"> m/s</span></div></div>'
-      + '<div class="hd-stat"><div class="hd-stat-l">🧭 Suunta</div><div class="hd-stat-v">' + Math.round(wx.wd) + '<span class="hd-stat-u">° ' + dirCard(wx.wd) + '</span></div></div>'
-      + '<div class="hd-stat"><div class="hd-stat-l">🌡 Lämpötila</div><div class="hd-stat-v">' + Math.round(wx.temp) + '<span class="hd-stat-u">°C</span></div></div>'
-    + '</div>'
-    + '<div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Mallien yksittäiset tuuliarvot</div>'
-    + modelRow('MetNO', wx.wsMetno, wMetno)
-    + modelRow('ECMWF', wx.wsEcmwf, wEcmwf)
-    + modelRow('ICON', wx.wsIcon, wIcon)
-    + '<div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:13px">'
-      + '<strong style="color:' + spreadCol + '">Ennustevarmuus: ' + spreadTxt + '</strong><br>'
-      + '<span style="color:var(--muted);font-size:12px">Mallien välinen hajonta tuulessa. Mitä pienempi, sitä luotettavampi ennuste.</span>'
-    + '</div>';
-
-  openModal(pos.clockStr + ' — ' + pos.name, html);
 };
 
 document.getElementById('loc-input').addEventListener('keydown', function(e){ if(e.key==='Enter') searchLoc(); });
