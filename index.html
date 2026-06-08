@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v3.2</title>
+<title>Purjehdussää v3.3</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -187,7 +187,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.2</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.3</span>
 </div>
 
 <script>
@@ -286,7 +286,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v3.2';
+var APP_VERSION = 'v3.3';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -772,8 +772,6 @@ async function showRouteView(btn) {
       +'<div class="sec-label" style="margin-top:16px">Paluussa \u00b7 Su 14.6. \u00b7 09:00</div>'
       +renderLeg(rowsBA,'Paluu: Tallinna \u2192 Helsinki','Su 14.6.2026')
       +'<div class="update-info">ICON-seamless (Open-Meteo) \u00b7 FMI WFS \u00b7 '+APP_VERSION+'</div>';
-
-    step('Valmis!', true);
 
   } catch(err) {
     document.getElementById('main-content').innerHTML =
