@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v3.7</title>
+<title>Purjehdussää v3.8</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.7</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.8</span>
 </div>
 
 <script>
@@ -297,7 +297,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v3.7';
+var APP_VERSION = 'v3.8';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -940,11 +940,44 @@ function parseGPX(xmlText) {
   return wpts;
 }
 
+// Muodosta datetime-local string paikallisessa ajassa (HH:00 pyöristys ylöspäin)
+function defaultStartDateStr() {
+  var now = new Date();
+  // Pyöristä seuraavaan täysituntiin
+  var next = new Date(now.getTime());
+  if (next.getMinutes() > 0 || next.getSeconds() > 0) {
+    next.setMinutes(0); next.setSeconds(0); next.setMilliseconds(0);
+    next = new Date(next.getTime() + 3600000);
+  }
+  var Y = next.getFullYear();
+  var M = String(next.getMonth()+1).padStart(2,'0');
+  var D = String(next.getDate()).padStart(2,'0');
+  var H = String(next.getHours()).padStart(2,'0');
+  return Y + '-' + M + '-' + D + 'T' + H + ':00';
+}
+
+// Muodosta ennusteen maksimilähtöaika (nyt + 15 vrk, jätetään 1 vrk puskuri)
+function maxForecastDateStr() {
+  var d = new Date();
+  d.setDate(d.getDate() + 15);
+  var Y = d.getFullYear();
+  var M = String(d.getMonth()+1).padStart(2,'0');
+  var D = String(d.getDate()).padStart(2,'0');
+  return Y + '-' + M + '-' + D + 'T23:00';
+}
+
 function openGPXPanel() {
   document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
   document.getElementById('btn-gpx').classList.add('active');
 
-  var defDate = '2026-06-12T09:00';
+  var defDate = defaultStartDateStr();
+  var maxDate = maxForecastDateStr();
+
+  // Laske ennusteen viimeinen päivä näytettäväksi
+  var maxD = new Date(); maxD.setDate(maxD.getDate()+15);
+  var maxDateFin = maxD.getDate() + '.' + (maxD.getMonth()+1) + '.' + maxD.getFullYear();
+  var nowFin = (new Date()).getDate() + '.' + ((new Date()).getMonth()+1) + '.' + (new Date()).getFullYear();
+
   var html =
     '<div style="padding:4px 0 8px">'
     + '<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Lataa GPX-tiedosto tai syötä reitti. Appi laskee optimaaliset halssit ja saapumisajat Quartetin polaarisen mukaan.</div>'
@@ -961,15 +994,19 @@ function openGPXPanel() {
     + '<div id="gpx-wp-preview" style="margin-top:8px"></div>'
 
     // Lähtöaika
-    + '<div style="margin:12px 0 6px">'
-      + '<label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Lähtöaika</label>'
-      + '<input type="datetime-local" id="gpx-starttime" value="' + defDate + '" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;color:var(--text);background:#fff">'
+    + '<div style="margin:12px 0 4px">'
+      + '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">'
+        + '<label style="font-size:13px;font-weight:600;color:var(--text)">L\u00e4ht\u00f6aika</label>'
+        + '<span style="font-size:11px;color:var(--muted)">Ennuste saatavilla: ' + nowFin + ' \u2013 ' + maxDateFin + '</span>'
+      + '</div>'
+      + '<input type="datetime-local" id="gpx-starttime" value="' + defDate + '" min="' + defDate + '" max="' + maxDate + '" oninput="gpxDateCheck()" onchange="gpxDateCheck()" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;color:var(--text);background:#fff">'
+      + '<div id="gpx-date-warn" style="display:none;margin-top:6px;padding:8px 10px;background:#fff8e8;border:1px solid #f0c040;border-radius:6px;font-size:12px;color:#8a6a20"></div>'
     + '</div>'
 
     // Polaarinen lyhyt näyttö
     + '<div style="background:#e8f0f9;border-radius:8px;padding:10px 12px;margin:10px 0;display:flex;align-items:center;justify-content:space-between">'
       + '<div style="font-size:12px;font-weight:600;color:#0a4272">Polaarinen: ' + Q.TWA_MAX + '\u00b0 / VMG ' + (Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180)).toFixed(1) + ' kts</div>'
-      + '<button onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">Säädä \u2699\ufe0f</button>'
+      + '<button onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">S\u00e4\u00e4d\u00e4 \u2699\ufe0f</button>'
     + '</div>'
 
     // Laske-nappi
@@ -978,6 +1015,27 @@ function openGPXPanel() {
 
   openModal('\uD83D\uDCCF GPX-reittioptimoija', html);
 }
+
+function gpxDateCheck() {
+  var el = document.getElementById('gpx-starttime');
+  var warn = document.getElementById('gpx-date-warn');
+  if (!el || !warn) return;
+  var val = el.value;
+  if (!val) return;
+  var chosen = new Date(val);
+  var now = new Date();
+  var maxD = new Date(); maxD.setDate(maxD.getDate() + 15);
+  warn.style.display = 'none';
+  warn.textContent = '';
+  if (chosen < now) {
+    warn.style.display = 'block';
+    warn.textContent = '\u26a0\ufe0f Valittu aika on menneisyydess\u00e4. API palauttaa uusimman saatavilla olevan datan l\u00e4ht\u00f6ajankohdalle \u2014 vanhoja tunteja ei ole.';
+  } else if (chosen > maxD) {
+    warn.style.display = 'block';
+    warn.textContent = '\u26a0\ufe0f ICON-seamless-ennuste kattaa max. 16 vrk. Valittu aika saattaa olla ennustejakson ulkopuolella \u2014 s\u00e4\u00e4data voi puuttua osalle reitin tunneista.';
+  }
+}
+window.gpxDateCheck = gpxDateCheck;
 
 // Globaali GPX-reittimuuttuja
 var gpxWaypoints = null;
@@ -1098,9 +1156,16 @@ async function calcGPXRoute() {
     function extractWxByTime(data, dt) {
       if (!data || !data.hourly) return null;
       var H = data.hourly;
-      var y = dt.getFullYear(), mo = String(dt.getMonth()+1).padStart(2,'0');
-      var d = String(dt.getDate()).padStart(2,'0'), h = String(dt.getHours()).padStart(2,'0');
-      var target = y + '-' + mo + '-' + d + 'T' + h + ':00';
+      // Muodosta aika Europe/Helsinki -vyöhykkeessä riippumatta selaimen TZ:sta
+      var fmt = new Intl.DateTimeFormat('fi-FI', {
+        timeZone: 'Europe/Helsinki',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', hour12: false
+      });
+      var parts = fmt.formatToParts(dt);
+      var pp = {};
+      parts.forEach(function(p){ pp[p.type] = p.value; });
+      var target = pp.year + '-' + pp.month + '-' + pp.day + 'T' + pp.hour + ':00';
       for (var i = 0; i < H.time.length; i++) {
         if (H.time[i] === target) return {
           ws: H.windspeed_10m[i], wd: H.winddirection_10m[i],
@@ -1109,6 +1174,26 @@ async function calcGPXRoute() {
         };
       }
       return null;
+    }
+
+    // Muodosta aikamerkkijono Helsinki-TZ näyttöä varten (päivämäärä + kellonaika)
+    function fmtHelsinkiTime(dt) {
+      var fmt = new Intl.DateTimeFormat('fi-FI', {
+        timeZone: 'Europe/Helsinki',
+        day: 'numeric', month: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      });
+      return fmt.format(dt);
+    }
+    function fmtHelsinkiHHMM(dt) {
+      return new Intl.DateTimeFormat('fi-FI', {
+        timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(dt);
+    }
+    function fmtHelsinkiDate(dt) {
+      return new Intl.DateTimeFormat('fi-FI', {
+        timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric'
+      }).format(dt);
     }
 
     step('Rakennetaan reittitaulukko...', null);
@@ -1140,8 +1225,8 @@ async function calcGPXRoute() {
         vmgThisHour = routing.vmg;
       }
 
-      var timeStr = String(curTime.getHours()).padStart(2,'0') + ':00';
-      var dateStr = curTime.getDate() + '.' + (curTime.getMonth()+1) + '.';
+      var timeStr = fmtHelsinkiHHMM(curTime);
+      var dateStr = fmtHelsinkiDate(curTime);
       rows.push({
         h: h,
         timeStr: timeStr,
@@ -1163,8 +1248,8 @@ async function calcGPXRoute() {
     var arrPos = posAtTime(segs, 1.0, totalNM);
     rows.push({
       h: rows.length,
-      timeStr: String(curTime.getHours()).padStart(2,'0') + ':00',
-      dateStr: curTime.getDate() + '.' + (curTime.getMonth()+1) + '.',
+      timeStr: fmtHelsinkiHHMM(curTime),
+      dateStr: fmtHelsinkiDate(curTime),
       fullTime: new Date(curTime.getTime()),
       lat: arrPos.lat, lon: arrPos.lon,
       name: wpts[wpts.length-1].name,
@@ -1194,13 +1279,18 @@ async function calcGPXRoute() {
 
     // Otsikko
     var fromName = wpts[0].name, toName = wpts[wpts.length-1].name;
-    var startDateStr = startTime.getDate() + '.' + (startTime.getMonth()+1) + '.' + startTime.getFullYear();
+    var startDateStr = new Intl.DateTimeFormat('fi-FI', {
+      timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric', year: 'numeric'
+    }).format(startTime);
+    var startHHMM = new Intl.DateTimeFormat('fi-FI', {
+      timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(startTime);
 
     window._gpxRows = {};
 
     var tableHTML = '<div class="route-leg"><div class="route-leg-head" onclick="toggleLeg(this)">'
       + '<div><div class="route-leg-name">' + fromName + ' \u2192 ' + toName + '</div>'
-      + '<div class="route-leg-date">' + startDateStr + ' klo ' + String(startTime.getHours()).padStart(2,'0') + ':00 \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + '</div></div>'
+      + '<div class="route-leg-date">' + startDateStr + ' klo ' + startHHMM + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + '</div></div>'
       + '<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
       + '</div><div class="route-hours">'
       + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:700;color:var(--muted);padding:5px 14px">'
@@ -1257,11 +1347,19 @@ async function calcGPXRoute() {
     });
     wpTableHTML += '</div></div>';
 
+    var missingWx = rows.filter(function(r){ return !r.arrived && !r.wx; }).length;
+    var missingBanner = missingWx > 0
+      ? '<div style="background:#fff8e8;border:1px solid #f0c040;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#8a6a20">'
+        + '\u26a0\ufe0f ' + missingWx + ' tunnille ei saatu s\u00e4\u00e4dataa \u2014 ne j\u00e4\u00e4v\u00e4t pois taulukosta ja nopeudena k\u00e4ytettiin oletusta 5 kts. '
+        + 'Syy: l\u00e4ht\u00f6aika saattaa olla l\u00e4hell\u00e4 ICON-seamless-ennusteen rajaa (max 16 vrk).</div>'
+      : '';
+
     logEl.innerHTML =
       '<div class="route-header">'
         + '<div class="route-title">\ud83d\udccf GPX-reitti: ' + fromName + ' \u2013 ' + toName + '</div>'
         + '<div class="route-sub">ICON-seamless \u00b7 VMG-reititys \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + '</div>'
       + '</div>'
+      + missingBanner
       + '<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:12px">'
         + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
           + '<div style="font-weight:700;color:#0a4272">\u26f5 Quartet \u2014 polaarinen</div>'
