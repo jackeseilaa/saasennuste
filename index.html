@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v3.9</title>
+<title>Purjehdussää v4.0</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.9</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.0</span>
 </div>
 
 <script>
@@ -297,7 +297,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v3.9';
+var APP_VERSION = 'v4.0';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -1037,8 +1037,350 @@ function gpxDateCheck() {
 }
 window.gpxDateCheck = gpxDateCheck;
 
-// Globaali GPX-reittimuuttuja
+// Globaalit GPX-muuttujat
 var gpxWaypoints = null;
+var gpxForecastCache = null;   // tallennetaan haku, ei haeta uudelleen aikamuutoksessa
+
+async function calcGPXRoute() {
+  var wpts = gpxWaypoints;
+  if (!wpts || wpts.length < 2) { alert('Lataa ensin GPX-tiedosto v\u00e4hint\u00e4\u00e4n 2 reittipisteell\u00e4.'); return; }
+
+  var startInput = document.getElementById('gpx-starttime');
+  var startTime = startInput ? new Date(startInput.value) : new Date();
+  if (isNaN(startTime.getTime())) { alert('Tarkista l\u00e4ht\u00f6aika.'); return; }
+
+  closeModalDirect();
+  document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('btn-gpx').classList.add('active');
+
+  var logEl = document.getElementById('main-content');
+  var steps = [];
+  function step(msg, ok) {
+    steps.push({ msg: msg, ok: ok });
+    logEl.innerHTML = '<div style="padding:16px;font-family:monospace;font-size:12px">'
+      + steps.map(function(s){ return '<div style="color:' + (s.ok===false?'red':s.ok===true?'#1a7a4a':'#888') + ';padding:3px 0">'
+        + (s.ok===true?'\u2713 ':s.ok===false?'\u2717 ':'\u27f3 ') + s.msg + '</div>'; }).join('')
+      + '</div>';
+  }
+
+  try {
+    step('Lasketaan reittigeometria (' + wpts.length + ' pistett\u00e4)...', null);
+    var segs = buildRouteSegments(wpts);
+    var totalNM = totalDist(segs);
+    step('Geometria OK \u2014 ' + totalNM.toFixed(1) + ' M, ' + segs.length + ' jalkaa', true);
+
+    // Hae ennustedata vain jos ei viel\u00e4 cachessa
+    if (!gpxForecastCache) {
+      step('Haetaan s\u00e4\u00e4data ' + wpts.length + ' reittipisteelle...', null);
+      var forecastCache = {};
+      var fetches = wpts.map(function(wp) {
+        var url = 'https://api.open-meteo.com/v1/forecast'
+          + '?latitude=' + wp.lat.toFixed(4) + '&longitude=' + wp.lon.toFixed(4)
+          + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+          + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
+        var c = new AbortController();
+        setTimeout(function(){ c.abort(); }, 12000);
+        return fetch(url, { signal: c.signal })
+          .then(function(r){ return r.json(); })
+          .then(function(d){ if (d && d.hourly) forecastCache[wp.lat.toFixed(3)+'_'+wp.lon.toFixed(3)] = d; })
+          .catch(function(){});
+      });
+      await Promise.all(fetches);
+      var fetched = Object.keys(forecastCache).length;
+      step(fetched + '/' + wpts.length + ' s\u00e4\u00e4pistett\u00e4 haettu', fetched > 0);
+      if (fetched === 0) throw new Error('S\u00e4\u00e4dataa ei saatu');
+      gpxForecastCache = forecastCache;
+    } else {
+      step('K\u00e4ytet\u00e4\u00e4n tallennettua s\u00e4\u00e4dataa (\u00e4l\u00e4 hae uudelleen)', true);
+    }
+
+    renderGPXRoute(wpts, segs, totalNM, gpxForecastCache, startTime, logEl);
+
+  } catch(err) {
+    logEl.innerHTML = '<div class="err" style="text-align:left;font-size:13px">'
+      + '<strong>Virhe:</strong> ' + err.message + '<br><br>'
+      + '<pre style="font-size:11px;overflow:auto">' + (err.stack||'').substring(0,400) + '</pre>'
+      + '<button class="retry-btn" onclick="openGPXPanel()">\u21bb Yrit\u00e4 uudelleen</button></div>';
+  }
+}
+
+// Laske reitti uudelleen uudella l\u00e4ht\u00f6ajalla — k\u00e4ytt\u00e4\u00e4 cachea, ei API-hakuja
+function recalcGPXRoute(isoStr) {
+  var wpts = gpxWaypoints;
+  var cache = gpxForecastCache;
+  if (!wpts || !cache) { openGPXPanel(); return; }
+  var startTime = new Date(isoStr);
+  if (isNaN(startTime.getTime())) return;
+  // P\u00e4ivit\u00e4 my\u00f6s globaali l\u00e4ht\u00f6aika s\u00e4ilt\u00f6\u00f6n
+  window._gpxLastStart = isoStr;
+  var segs = buildRouteSegments(wpts);
+  var totalNM = totalDist(segs);
+  var logEl = document.getElementById('main-content');
+  renderGPXRoute(wpts, segs, totalNM, cache, startTime, logEl);
+}
+
+function shiftGPXTime(deltaHours) {
+  var cur = window._gpxLastStart ? new Date(window._gpxLastStart) : new Date();
+  cur = new Date(cur.getTime() + deltaHours * 3600000);
+  // Py\u00f6rist\u00e4 tasatuntiin
+  cur.setMinutes(0); cur.setSeconds(0); cur.setMilliseconds(0);
+  var iso = toLocalISOString(cur);
+  window._gpxLastStart = iso;
+  recalcGPXRoute(iso);
+}
+
+// Apufunktio: Date -> "YYYY-MM-DDTHH:00" paikallisessa ajassa (datetime-local -formaatti)
+function toLocalISOString(dt) {
+  var Y = dt.getFullYear();
+  var M = String(dt.getMonth()+1).padStart(2,'0');
+  var D = String(dt.getDate()).padStart(2,'0');
+  var H = String(dt.getHours()).padStart(2,'0');
+  return Y + '-' + M + '-' + D + 'T' + H + ':00';
+}
+
+function renderGPXRoute(wpts, segs, totalNM, forecastCache, startTime, logEl) {
+
+  function getNearestGPXCache(lat, lon) {
+    var best = null, bd = 9999;
+    Object.keys(forecastCache).forEach(function(k) {
+      var parts = k.split('_'), la = parseFloat(parts[0]), lo = parseFloat(parts[1]);
+      var dist = Math.abs(la-lat) + Math.abs(lo-lon);
+      if (dist < bd) { bd = dist; best = forecastCache[k]; }
+    });
+    return best;
+  }
+  function extractWxByTime(data, dt) {
+    if (!data || !data.hourly) return null;
+    var H = data.hourly;
+    var fmt = new Intl.DateTimeFormat('fi-FI', {
+      timeZone: 'Europe/Helsinki',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', hour12: false
+    });
+    var parts = fmt.formatToParts(dt);
+    var pp = {};
+    parts.forEach(function(p){ pp[p.type] = p.value; });
+    var target = pp.year + '-' + pp.month + '-' + pp.day + 'T' + pp.hour + ':00';
+    for (var i = 0; i < H.time.length; i++) {
+      if (H.time[i] === target) return {
+        ws: H.windspeed_10m[i], wd: H.winddirection_10m[i],
+        gust: H.windgusts_10m ? H.windgusts_10m[i] : H.windspeed_10m[i]*1.3,
+        temp: H.temperature_2m[i], wc: H.weathercode[i]
+      };
+    }
+    return null;
+  }
+  function fmtHelsinkiHHMM(dt) {
+    return new Intl.DateTimeFormat('fi-FI', {
+      timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(dt);
+  }
+  function fmtHelsinkiDate(dt) {
+    return new Intl.DateTimeFormat('fi-FI', {
+      timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric'
+    }).format(dt);
+  }
+
+  // Reittilaskenta
+  var rows = [];
+  var cumNM = 0;
+  var curTime = new Date(startTime.getTime());
+  var maxHours = 72;
+
+  for (var h = 0; h < maxHours; h++) {
+    if (cumNM >= totalNM) break;
+    var pos = posAtTime(segs, 1.0, cumNM);
+    var segIdx = 0, segCum = 0;
+    for (var si2 = 0; si2 < segs.length; si2++) {
+      if (segCum + segs[si2].dist >= cumNM) { segIdx = si2; break; }
+      segCum += segs[si2].dist;
+    }
+    var legBrg = segs[segIdx].brg;
+    var data2 = getNearestGPXCache(pos.lat, pos.lon);
+    var wx = data2 ? extractWxByTime(data2, curTime) : null;
+    var routing = null;
+    var vmgThisHour = 5.0;
+    if (wx && !isNaN(wx.wd)) {
+      routing = gpxRoutingCalc(wx.wd, legBrg);
+      vmgThisHour = routing.vmg;
+    }
+    rows.push({
+      h: h,
+      timeStr: fmtHelsinkiHHMM(curTime),
+      dateStr: fmtHelsinkiDate(curTime),
+      fullTime: new Date(curTime.getTime()),
+      lat: pos.lat, lon: pos.lon, name: pos.name,
+      distFromStart: cumNM,
+      legBrg: legBrg,
+      wx: wx, routing: routing, arrived: false
+    });
+    cumNM = Math.min(cumNM + vmgThisHour, totalNM);
+    curTime = new Date(curTime.getTime() + 3600000);
+  }
+
+  // Saapuminen
+  var arrPos = posAtTime(segs, 1.0, totalNM);
+  var etaH = rows.length;
+  rows.push({
+    h: etaH,
+    timeStr: fmtHelsinkiHHMM(curTime),
+    dateStr: fmtHelsinkiDate(curTime),
+    fullTime: new Date(curTime.getTime()),
+    lat: arrPos.lat, lon: arrPos.lon,
+    name: wpts[wpts.length-1].name,
+    distFromStart: totalNM,
+    wx: null, routing: null, arrived: true
+  });
+
+  var etaStr = etaH + ' h';
+  if (etaH >= 24) etaStr = Math.floor(etaH/24) + ' vrk ' + (etaH%24) + ' h';
+
+  var fromName = wpts[0].name, toName = wpts[wpts.length-1].name;
+  var startDateStr = new Intl.DateTimeFormat('fi-FI', {
+    timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric', year: 'numeric'
+  }).format(startTime);
+  var startHHMM = new Intl.DateTimeFormat('fi-FI', {
+    timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(startTime);
+
+  // ETA-aika n\u00e4yt\u00f6ss\u00e4
+  var arrRow = rows[rows.length-1];
+  var etaFull = arrRow.dateStr + ' klo ' + arrRow.timeStr;
+
+  var worst = { s:100, col:'#1a7a4a', bg:'#e6f4ec', lbl:'Kevyt' };
+  rows.forEach(function(r) {
+    if (r.wx) { var si3 = sailCalc(Math.round(r.wx.ws), Math.round(r.wx.gust||r.wx.ws)); if (si3.s < worst.s) worst = si3; }
+  });
+
+  var missingWx = rows.filter(function(r){ return !r.arrived && !r.wx; }).length;
+  var missingBanner = missingWx > 0
+    ? '<div style="background:#fff8e8;border:1px solid #f0c040;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#8a6a20">'
+      + '\u26a0\ufe0f ' + missingWx + ' tunnille ei saatu s\u00e4\u00e4dataa \u2014 ennuste ei kata t\u00e4t\u00e4 ajankohtaa (max 16 vrk).</div>'
+    : '';
+
+  // L\u00e4ht\u00f6aika-paneeli — inline, ei modaali
+  var curIso = toLocalISOString(startTime);
+  var maxIso = toLocalISOString(new Date(Date.now() + 15*86400000));
+
+  function shiftBtn(label, dh) {
+    return '<button ontouchstart="" onclick="shiftGPXTime(' + dh + ')" style="background:rgba(255,255,255,0.85);border:1px solid #b0c8e8;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;color:#0a4272;cursor:pointer;white-space:nowrap">' + label + '</button>';
+  }
+
+  var timePanelHTML =
+    '<div style="background:#0a4272;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+      + '<div style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em">L\u00c4HT\u00d6AIKA — muuta ja laske uudelleen</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+        + '<input type="datetime-local" id="gpx-rerun-time" value="' + curIso + '" max="' + maxIso + '" '
+          + 'style="flex:1;min-width:180px;padding:8px 10px;border:none;border-radius:6px;font-size:15px;font-weight:600;color:#0a4272;background:#fff;cursor:pointer" '
+          + 'onchange="recalcGPXRoute(this.value)">'
+        + '<button ontouchstart="" onclick="recalcGPXRoute(document.getElementById(\'gpx-rerun-time\').value)" '
+          + 'style="background:#b87c1a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">'
+          + '\u21bb Laske</button>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+        + shiftBtn('\u22121h', -1) + shiftBtn('+1h', 1) + shiftBtn('+3h', 3)
+        + shiftBtn('+6h', 6) + shiftBtn('+12h', 12) + shiftBtn('+1vrk', 24)
+        + shiftBtn('+2vrk', 48)
+      + '</div>'
+      + '<div style="color:rgba(255,255,255,0.6);font-size:11px;margin-top:6px">S\u00e4\u00e4data ladattu \u2014 aikamuutos ei tee uutta API-hakua</div>'
+    + '</div>';
+
+  function dirArrowS(deg) {
+    var rot = (deg+180)%360;
+    return '<svg width="13" height="13" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate('+rot+'deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="15" x2="9" y2="3"/><polyline points="5,7 9,3 13,7"/></svg>';
+  }
+
+  window._gpxRows = {};
+
+  var tableHTML = '<div class="route-leg"><div class="route-leg-head" onclick="toggleLeg(this)">'
+    + '<div><div class="route-leg-name">' + fromName + ' \u2192 ' + toName + '</div>'
+    + '<div class="route-leg-date">' + startDateStr + ' klo ' + startHHMM + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + ' \u00b7 perillä ' + etaFull + '</div></div>'
+    + '<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
+    + '</div><div class="route-hours">'
+    + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:700;color:var(--muted);padding:5px 14px">'
+    + '<span style="min-width:72px">PVM / KLO</span><span style="min-width:22px"></span>'
+    + '<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
+    + '<span style="min-width:50px">PUUSKA</span><span style="min-width:68px">SUUNTA</span>'
+    + '<span style="flex:1">SIJAINTI</span><span>KELI</span></div>';
+
+  rows.forEach(function(row) {
+    if (row.arrived && !row.wx) {
+      tableHTML += '<div class="rhr" style="background:#eef8ee;padding:10px 14px">'
+        + '<span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">'
+        + '\u2693\ufe0f Perill\u00e4: ' + row.name + ' \u00b7 ' + row.dateStr + ' klo ' + row.timeStr + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ' + etaStr
+        + '</span></div>';
+      return;
+    }
+    if (!row.wx) return;
+    var ws2 = Math.round(row.wx.ws), gust2 = Math.round(row.wx.gust||row.wx.ws);
+    var si4 = sailCalc(ws2, gust2);
+    var rt2 = row.routing, isBeat2 = rt2 && rt2.mode === 'beat';
+    var bg2 = isBeat2 ? 'background:#fffbf0;' : '';
+    var key2 = 'gr_' + Math.random().toString(36).slice(2,8);
+    window._gpxRows[key2] = { pos: row, wx: row.wx, si: si4, routing: rt2 };
+
+    tableHTML += '<div class="rhr" style="' + bg2 + 'cursor:pointer;flex-wrap:wrap;-webkit-tap-highlight-color:rgba(0,0,0,0.08)" onclick="showGPXRowDetail(\'' + key2 + '\')" ontouchstart="">'
+      + '<span style="pointer-events:none;min-width:72px;font-size:12px;font-weight:600;color:var(--ocean)">' + row.dateStr + ' ' + row.timeStr + '</span>'
+      + '<span style="pointer-events:none;min-width:22px">' + (WI[row.wx.wc]||'\ud83c\udf21') + '</span>'
+      + '<span style="pointer-events:none;min-width:34px;font-size:13px">' + Math.round(row.wx.temp) + '\u00b0</span>'
+      + '<span style="pointer-events:none;min-width:54px;font-size:13px;font-weight:600">' + ws2 + ' m/s</span>'
+      + '<span style="pointer-events:none;min-width:50px;font-size:11px;color:var(--muted)">\u2191' + gust2 + ' m/s</span>'
+      + '<span style="pointer-events:none;min-width:68px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:2px">' + dirArrowS(row.wx.wd) + ' ' + Math.round(row.wx.wd) + '\u00b0 ' + dirCard(row.wx.wd) + '</span>'
+      + '<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
+        + '\u25b6 ' + row.name + ' <span style="color:#c0c8d4">\u00b7 ' + row.distFromStart.toFixed(0) + ' M</span>'
+      + '</span>'
+      + (isBeat2 ? '<span style="pointer-events:none;width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS ' + rt2.tack1 + '\u00b0\u21d4' + rt2.tack2 + '\u00b0 \u00b7 VMG ' + rt2.vmg.toFixed(1) + ' kts \u00b7 kurssi ' + Math.round(row.legBrg) + '\u00b0</span>' : '')
+      + '<span style="pointer-events:none;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;color:' + si4.col + ';background:' + si4.bg + '">' + si4.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
+      + '</div>';
+  });
+
+  tableHTML += '</div></div>';
+
+  // Reittijalat
+  var wpTableHTML = '<div style="margin-top:14px">'
+    + '<div class="sec-label">Reittijalat</div>'
+    + '<div style="display:flex;flex-direction:column;gap:4px">';
+  segs.forEach(function(seg) {
+    var brg = Math.round(seg.brg);
+    wpTableHTML += '<div style="display:flex;align-items:center;gap:8px;background:var(--card);border-radius:6px;border:1px solid var(--border);padding:8px 12px;font-size:12px">'
+      + '<span style="font-size:16px">' + dirArrowS(seg.brg) + '</span>'
+      + '<span style="font-weight:600;flex:1">' + seg.from.name + ' \u2192 ' + seg.to.name + '</span>'
+      + '<span style="color:var(--muted)">' + seg.dist.toFixed(1) + ' M</span>'
+      + '<span style="background:#e8f0f9;border-radius:6px;padding:2px 7px;font-weight:700;color:#0a4272">' + brg + '\u00b0 ' + dirCard(brg) + '</span>'
+      + '</div>';
+  });
+  wpTableHTML += '</div></div>';
+
+  logEl.innerHTML =
+    '<div class="route-header">'
+      + '<div class="route-title">\ud83d\udccf GPX-reitti: ' + fromName + ' \u2013 ' + toName + '</div>'
+      + '<div class="route-sub">ICON-seamless \u00b7 VMG-reititys \u00b7 ' + totalNM.toFixed(0) + ' M</div>'
+    + '</div>'
+    + timePanelHTML
+    + missingBanner
+    + '<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:12px">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+        + '<div style="font-weight:700;color:#0a4272">\u26f5 Quartet \u2014 polaarinen</div>'
+        + '<button ontouchstart="" onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">S\u00e4\u00e4d\u00e4 \u2699\ufe0f</button>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
+        + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">Nousukulma</div><div style="font-size:16px;font-weight:700;color:#0a4272">' + Q.TWA_MAX + '\u00b0</div></div>'
+        + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">VMG nousu</div><div style="font-size:16px;font-weight:700;color:#0a4272">' + (Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180)).toFixed(1) + ' kts</div></div>'
+        + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">L\u00e4ht\u00f6</div><div style="font-size:14px;font-weight:700;color:#0a4272">' + startDateStr + ' ' + startHHMM + '</div></div>'
+        + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">ETA</div><div style="font-size:14px;font-weight:700;color:#0a4272">' + etaStr + '</div></div>'
+      + '</div>'
+      + '<div style="margin-top:6px;font-size:11px;color:#4a6a8a">'
+        + '\ud83d\udfe1 Keltainen = halssaus tarpeen \u00b7 Napauta rivi\u00e4 n\u00e4hd\u00e4ksesi halssikurssit'
+      + '</div>'
+    + '</div>'
+    + '<div class="sec-label">Tuntikohtainen ennuste</div>'
+    + tableHTML
+    + wpTableHTML
+    + '<div class="update-info">GPX-reitti \u00b7 ICON-seamless \u00b7 ' + APP_VERSION + '</div>';
+
+  // Tallenna lähtöaika globaalisti aikasiirtymiä varten
+  window._gpxLastStart = toLocalISOString(startTime);
+}
 
 function handleGPXDragover(e) {
   e.preventDefault();
@@ -1096,297 +1438,13 @@ function renderGPXPreview(wpts) {
   if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
 }
 
-async function calcGPXRoute() {
-  var wpts = gpxWaypoints;
-  if (!wpts || wpts.length < 2) { alert('Lataa ensin GPX-tiedosto v\u00e4hint\u00e4\u00e4n 2 reittipisteell\u00e4.'); return; }
-
-  var startInput = document.getElementById('gpx-starttime');
-  var startTime = startInput ? new Date(startInput.value) : new Date();
-  if (isNaN(startTime.getTime())) { alert('Tarkista l\u00e4ht\u00f6aika.'); return; }
-
-  closeModalDirect();
-  document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
-  document.getElementById('btn-gpx').classList.add('active');
-
-  var logEl = document.getElementById('main-content');
-  var steps = [];
-  function step(msg, ok) {
-    steps.push({ msg: msg, ok: ok });
-    logEl.innerHTML = '<div style="padding:16px;font-family:monospace;font-size:12px">'
-      + steps.map(function(s){ return '<div style="color:' + (s.ok===false?'red':s.ok===true?'#1a7a4a':'#888') + ';padding:3px 0">'
-        + (s.ok===true?'\u2713 ':s.ok===false?'\u2717 ':'\u27f3 ') + s.msg + '</div>'; }).join('')
-      + '</div>';
-  }
-
-  try {
-    step('Lasketaan reittigeometria (' + wpts.length + ' pistett\u00e4)...', null);
-    var segs = buildRouteSegments(wpts);
-    var totalNM = totalDist(segs);
-    step('Geometria OK \u2014 ' + totalNM.toFixed(1) + ' M, ' + segs.length + ' jalkaa', true);
-
-    step('Haetaan s\u00e4\u00e4data ' + wpts.length + ' reittipisteelle...', null);
-    var forecastCache = {};
-    var fetches = wpts.map(function(wp) {
-      var url = 'https://api.open-meteo.com/v1/forecast'
-        + '?latitude=' + wp.lat.toFixed(4) + '&longitude=' + wp.lon.toFixed(4)
-        + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-        + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
-      var c = new AbortController();
-      setTimeout(function(){ c.abort(); }, 12000);
-      return fetch(url, { signal: c.signal })
-        .then(function(r){ return r.json(); })
-        .then(function(d){ if (d && d.hourly) forecastCache[wp.lat.toFixed(3)+'_'+wp.lon.toFixed(3)] = d; })
-        .catch(function(){});
-    });
-    await Promise.all(fetches);
-    var fetched = Object.keys(forecastCache).length;
-    step(fetched + '/' + wpts.length + ' s\u00e4\u00e4pistett\u00e4 haettu', fetched > 0);
-    if (fetched === 0) throw new Error('S\u00e4\u00e4dataa ei saatu');
-
-    // Apufunktiot
-    function getNearestGPXCache(lat, lon) {
-      var best = null, bd = 9999;
-      Object.keys(forecastCache).forEach(function(k) {
-        var parts = k.split('_'), la = parseFloat(parts[0]), lo = parseFloat(parts[1]);
-        var dist = Math.abs(la-lat) + Math.abs(lo-lon);
-        if (dist < bd) { bd = dist; best = forecastCache[k]; }
-      });
-      return best;
-    }
-    function extractWxByTime(data, dt) {
-      if (!data || !data.hourly) return null;
-      var H = data.hourly;
-      // Muodosta aika Europe/Helsinki -vyöhykkeessä riippumatta selaimen TZ:sta
-      var fmt = new Intl.DateTimeFormat('fi-FI', {
-        timeZone: 'Europe/Helsinki',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', hour12: false
-      });
-      var parts = fmt.formatToParts(dt);
-      var pp = {};
-      parts.forEach(function(p){ pp[p.type] = p.value; });
-      var target = pp.year + '-' + pp.month + '-' + pp.day + 'T' + pp.hour + ':00';
-      for (var i = 0; i < H.time.length; i++) {
-        if (H.time[i] === target) return {
-          ws: H.windspeed_10m[i], wd: H.winddirection_10m[i],
-          gust: H.windgusts_10m ? H.windgusts_10m[i] : H.windspeed_10m[i]*1.3,
-          temp: H.temperature_2m[i], wc: H.weathercode[i]
-        };
-      }
-      return null;
-    }
-
-    // Muodosta aikamerkkijono Helsinki-TZ näyttöä varten (päivämäärä + kellonaika)
-    function fmtHelsinkiTime(dt) {
-      var fmt = new Intl.DateTimeFormat('fi-FI', {
-        timeZone: 'Europe/Helsinki',
-        day: 'numeric', month: 'numeric',
-        hour: '2-digit', minute: '2-digit', hour12: false
-      });
-      return fmt.format(dt);
-    }
-    function fmtHelsinkiHHMM(dt) {
-      return new Intl.DateTimeFormat('fi-FI', {
-        timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
-      }).format(dt);
-    }
-    function fmtHelsinkiDate(dt) {
-      return new Intl.DateTimeFormat('fi-FI', {
-        timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric'
-      }).format(dt);
-    }
-
-    step('Rakennetaan reittitaulukko...', null);
-
-    // Dynaamisesti etenevä laskenta
-    var rows = [];
-    var cumNM = 0;
-    var curTime = new Date(startTime.getTime());
-    var maxHours = 72;
-
-    for (var h = 0; h < maxHours; h++) {
-      if (cumNM >= totalNM) break;
-      var pos = posAtTime(segs, 1.0, cumNM); // speed=1 jotta saadaan sijainti, nopeus lasketaan erikseen
-      // Laske nykyinen jalkakurssi
-      var segIdx = 0, segCum = 0;
-      for (var si2 = 0; si2 < segs.length; si2++) {
-        if (segCum + segs[si2].dist >= cumNM) { segIdx = si2; break; }
-        segCum += segs[si2].dist;
-      }
-      var legBrg = segs[segIdx].brg;
-
-      var data2 = getNearestGPXCache(pos.lat, pos.lon);
-      var wx = data2 ? extractWxByTime(data2, curTime) : null;
-      var routing = null;
-      var vmgThisHour = 5.0;
-
-      if (wx && !isNaN(wx.wd)) {
-        routing = gpxRoutingCalc(wx.wd, legBrg);
-        vmgThisHour = routing.vmg;
-      }
-
-      var timeStr = fmtHelsinkiHHMM(curTime);
-      var dateStr = fmtHelsinkiDate(curTime);
-      rows.push({
-        h: h,
-        timeStr: timeStr,
-        dateStr: dateStr,
-        fullTime: new Date(curTime.getTime()),
-        lat: pos.lat, lon: pos.lon, name: pos.name,
-        distFromStart: cumNM,
-        legBrg: legBrg,
-        wx: wx,
-        routing: routing,
-        arrived: false
-      });
-
-      cumNM = Math.min(cumNM + vmgThisHour, totalNM);
-      curTime = new Date(curTime.getTime() + 3600000);
-    }
-
-    // Saapuminen
-    var arrPos = posAtTime(segs, 1.0, totalNM);
-    rows.push({
-      h: rows.length,
-      timeStr: fmtHelsinkiHHMM(curTime),
-      dateStr: fmtHelsinkiDate(curTime),
-      fullTime: new Date(curTime.getTime()),
-      lat: arrPos.lat, lon: arrPos.lon,
-      name: wpts[wpts.length-1].name,
-      distFromStart: totalNM,
-      wx: null, routing: null, arrived: true
-    });
-
-    step('Reitti laskettu: ' + rows.length + ' tuntirivi\u00e4', true);
-
-    // Renderöi
-    step('Renderöidään...', null);
-
-    function dirArrowS(deg) {
-      var rot = (deg+180)%360;
-      return '<svg width="13" height="13" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate('+rot+'deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="15" x2="9" y2="3"/><polyline points="5,7 9,3 13,7"/></svg>';
-    }
-
-    var worst = { s:100, col:'#1a7a4a', bg:'#e6f4ec', lbl:'Kevyt' };
-    rows.forEach(function(r) {
-      if (r.wx) { var si3 = sailCalc(Math.round(r.wx.ws), Math.round(r.wx.gust||r.wx.ws)); if (si3.s < worst.s) worst = si3; }
-    });
-
-    // Arvioitu matka-aika
-    var etaH = rows[rows.length-1].h;
-    var etaStr = etaH + ' h';
-    if (etaH >= 24) etaStr = Math.floor(etaH/24) + ' vrk ' + (etaH%24) + ' h';
-
-    // Otsikko
-    var fromName = wpts[0].name, toName = wpts[wpts.length-1].name;
-    var startDateStr = new Intl.DateTimeFormat('fi-FI', {
-      timeZone: 'Europe/Helsinki', day: 'numeric', month: 'numeric', year: 'numeric'
-    }).format(startTime);
-    var startHHMM = new Intl.DateTimeFormat('fi-FI', {
-      timeZone: 'Europe/Helsinki', hour: '2-digit', minute: '2-digit', hour12: false
-    }).format(startTime);
-
-    window._gpxRows = {};
-
-    var tableHTML = '<div class="route-leg"><div class="route-leg-head" onclick="toggleLeg(this)">'
-      + '<div><div class="route-leg-name">' + fromName + ' \u2192 ' + toName + '</div>'
-      + '<div class="route-leg-date">' + startDateStr + ' klo ' + startHHMM + ' \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + '</div></div>'
-      + '<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
-      + '</div><div class="route-hours">'
-      + '<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:700;color:var(--muted);padding:5px 14px">'
-      + '<span style="min-width:72px">PVM / KLO</span><span style="min-width:22px"></span>'
-      + '<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
-      + '<span style="min-width:50px">PUUSKA</span><span style="min-width:68px">SUUNTA</span>'
-      + '<span style="flex:1">SIJAINTI</span><span>KELI</span></div>';
-
-    rows.forEach(function(row) {
-      if (row.arrived && !row.wx) {
-        tableHTML += '<div class="rhr" style="background:#eef8ee;padding:10px 14px">'
-          + '<span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">'
-          + '\u2693\ufe0f Perillä: ' + row.name + ' klo ' + row.timeStr + ' (' + row.dateStr + ') \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ' + etaStr
-          + '</span></div>';
-        return;
-      }
-      if (!row.wx) return;
-      var ws2 = Math.round(row.wx.ws), gust2 = Math.round(row.wx.gust||row.wx.ws);
-      var si4 = sailCalc(ws2, gust2);
-      var rt2 = row.routing, isBeat2 = rt2 && rt2.mode === 'beat';
-      var bg2 = isBeat2 ? 'background:#fffbf0;' : '';
-      var key2 = 'gr_' + Math.random().toString(36).slice(2,8);
-      window._gpxRows[key2] = { pos: row, wx: row.wx, si: si4, routing: rt2 };
-
-      tableHTML += '<div class="rhr" style="' + bg2 + 'cursor:pointer;flex-wrap:wrap;-webkit-tap-highlight-color:rgba(0,0,0,0.08)" onclick="showGPXRowDetail(\'' + key2 + '\')" ontouchend="this._touched=true" ontouchstart="">'
-        + '<span style="pointer-events:none;min-width:72px;font-size:12px;font-weight:600;color:var(--ocean)">' + row.dateStr + ' ' + row.timeStr + '</span>'
-        + '<span style="pointer-events:none;min-width:22px">' + (WI[row.wx.wc]||'\ud83c\udf21') + '</span>'
-        + '<span style="pointer-events:none;min-width:34px;font-size:13px">' + Math.round(row.wx.temp) + '\u00b0</span>'
-        + '<span style="pointer-events:none;min-width:54px;font-size:13px;font-weight:600">' + ws2 + ' m/s</span>'
-        + '<span style="pointer-events:none;min-width:50px;font-size:11px;color:var(--muted)">\u2191' + gust2 + ' m/s</span>'
-        + '<span style="pointer-events:none;min-width:68px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:2px">' + dirArrowS(row.wx.wd) + ' ' + Math.round(row.wx.wd) + '\u00b0 ' + dirCard(row.wx.wd) + '</span>'
-        + '<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
-          + '\u25b6 ' + row.name + ' <span style="color:#c0c8d4">\u00b7 ' + row.distFromStart.toFixed(0) + ' M</span>'
-        + '</span>'
-        + (isBeat2 ? '<span style="pointer-events:none;width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS ' + rt2.tack1 + '\u00b0\u21d4' + rt2.tack2 + '\u00b0 \u00b7 VMG ' + rt2.vmg.toFixed(1) + ' kts \u00b7 kurssi ' + Math.round(row.legBrg) + '\u00b0</span>' : '')
-        + '<span style="pointer-events:none;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;color:' + si4.col + ';background:' + si4.bg + '">' + si4.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
-        + '</div>';
-    });
-
-    tableHTML += '</div></div>';
-
-    // Reittipisteet-taulukko
-    var wpTableHTML = '<div style="margin-top:14px">'
-      + '<div class="sec-label">Reittijalat</div>'
-      + '<div style="display:flex;flex-direction:column;gap:4px">';
-    segs.forEach(function(seg, i) {
-      var brg = Math.round(seg.brg);
-      wpTableHTML += '<div style="display:flex;align-items:center;gap:8px;background:var(--card);border-radius:6px;border:1px solid var(--border);padding:8px 12px;font-size:12px">'
-        + '<span style="font-size:16px">' + dirArrowS(seg.brg) + '</span>'
-        + '<span style="font-weight:600;flex:1">' + seg.from.name + ' \u2192 ' + seg.to.name + '</span>'
-        + '<span style="color:var(--muted)">' + seg.dist.toFixed(1) + ' M</span>'
-        + '<span style="background:#e8f0f9;border-radius:6px;padding:2px 7px;font-weight:700;color:#0a4272">' + brg + '\u00b0 ' + dirCard(brg) + '</span>'
-        + '</div>';
-    });
-    wpTableHTML += '</div></div>';
-
-    var missingWx = rows.filter(function(r){ return !r.arrived && !r.wx; }).length;
-    var missingBanner = missingWx > 0
-      ? '<div style="background:#fff8e8;border:1px solid #f0c040;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#8a6a20">'
-        + '\u26a0\ufe0f ' + missingWx + ' tunnille ei saatu s\u00e4\u00e4dataa \u2014 ne j\u00e4\u00e4v\u00e4t pois taulukosta ja nopeudena k\u00e4ytettiin oletusta 5 kts. '
-        + 'Syy: l\u00e4ht\u00f6aika saattaa olla l\u00e4hell\u00e4 ICON-seamless-ennusteen rajaa (max 16 vrk).</div>'
-      : '';
-
-    logEl.innerHTML =
-      '<div class="route-header">'
-        + '<div class="route-title">\ud83d\udccf GPX-reitti: ' + fromName + ' \u2013 ' + toName + '</div>'
-        + '<div class="route-sub">ICON-seamless \u00b7 VMG-reititys \u00b7 ' + totalNM.toFixed(0) + ' M \u00b7 ETA ' + etaStr + '</div>'
-      + '</div>'
-      + missingBanner
-      + '<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:12px">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
-          + '<div style="font-weight:700;color:#0a4272">\u26f5 Quartet \u2014 polaarinen</div>'
-          + '<button onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">S\u00e4\u00e4d\u00e4 \u2699\ufe0f</button>'
-        + '</div>'
-        + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
-          + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">Nousukulma</div><div style="font-size:16px;font-weight:700;color:#0a4272">' + Q.TWA_MAX + '\u00b0</div></div>'
-          + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">VMG nousu</div><div style="font-size:16px;font-weight:700;color:#0a4272">' + (Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180)).toFixed(1) + ' kts</div></div>'
-          + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">L\u00e4ht\u00f6</div><div style="font-size:14px;font-weight:700;color:#0a4272">' + startDateStr + '</div></div>'
-          + '<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">ETA</div><div style="font-size:14px;font-weight:700;color:#0a4272">' + etaStr + '</div></div>'
-        + '</div>'
-        + '<div style="margin-top:6px;font-size:11px;color:#4a6a8a">'
-          + '\ud83d\udfe1 Keltainen = halssaus tarpeen \u00b7 Napauta rivi\u00e4 n\u00e4hd\u00e4ksesi halssikurssit'
-        + '</div>'
-      + '</div>'
-      + '<div class="sec-label">Tuntikohtainen ennuste</div>'
-      + tableHTML
-      + wpTableHTML
-      + '<div class="update-info">GPX-reitti \u00b7 ICON-seamless \u00b7 ' + APP_VERSION + '</div>';
-
-  } catch(err) {
-    logEl.innerHTML = '<div class="err" style="text-align:left;font-size:13px">'
-      + '<strong>Virhe:</strong> ' + err.message + '<br><br>'
-      + '<pre style="font-size:11px;overflow:auto">' + (err.stack||'').substring(0,400) + '</pre>'
-      + '<button class="retry-btn" onclick="openGPXPanel()">\u21bb Yrit\u00e4 uudelleen</button></div>';
-  }
-}
+window.openGPXPanel = openGPXPanel;
+window.handleGPXFile = handleGPXFile;
+window.handleGPXDrop = handleGPXDrop;
+window.handleGPXDragover = handleGPXDragover;
+window.calcGPXRoute = calcGPXRoute;
+window.recalcGPXRoute = recalcGPXRoute;
+window.shiftGPXTime = shiftGPXTime;
 
 // GPX-spesifinen routingCalc (sama kuin globaali mutta erillinen nimi jottei törmää)
 function gpxRoutingCalc(twd, hdg) {
