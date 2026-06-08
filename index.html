@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v3.3</title>
+<title>Purjehdussää v3.4</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -187,7 +187,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.3</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.4</span>
 </div>
 
 <script>
@@ -286,7 +286,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v3.3';
+var APP_VERSION = 'v3.4';
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
@@ -719,10 +719,16 @@ async function showRouteView(btn) {
         +'<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
         +'<span style="min-width:50px">PUUSKA</span><span style="min-width:68px">SUUNTA</span>'
         +'<span style="flex:1">SIJAINTI</span><span>KELI</span></div>';
+      var lastWasArrival = false;
       rows.forEach(function(row) {
         var pos=row.pos, wx=row.wx;
         if (pos.arrived&&!wx) {
-          html+='<div class="rhr" style="background:#eef8ee"><span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">\u2693\ufe0f Perillä: '+pos.name+' · '+pos.distFromStart.toFixed(0)+' M</span></div>';
+          if (!lastWasArrival) {
+            html+='<div class="rhr" style="background:#eef8ee;padding:10px 14px">'
+              +'<span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">'
+              +'\u2693\ufe0f Perillä: '+pos.name+' \u00b7 '+pos.distFromStart.toFixed(0)+' M'
+              +'</span></div>';
+          }
           return;
         }
         if (!wx) return;
@@ -745,6 +751,7 @@ async function showRouteView(btn) {
           +(isBeat?'<span style="width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS '+rt.tack1+'\u00b0\u21d4'+rt.tack2+'\u00b0 VMG '+rt.vmg.toFixed(1)+' kts</span>':'')
           +'<span class="rhr-sail" style="color:'+si.col+';background:'+si.bg+';white-space:nowrap">'+si.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1')+'</span>'
           +'</div>';
+        lastWasArrival = pos.arrived;
       });
       html+='</div></div>';
       return html;
