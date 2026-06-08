@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.0</title>
+<title>Purjehdussää v4.1</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.0</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.1</span>
 </div>
 
 <script>
@@ -297,7 +297,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.0';
+var APP_VERSION = 'v4.1';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -1039,7 +1039,8 @@ window.gpxDateCheck = gpxDateCheck;
 
 // Globaalit GPX-muuttujat
 var gpxWaypoints = null;
-var gpxForecastCache = null;   // tallennetaan haku, ei haeta uudelleen aikamuutoksessa
+var gpxForecastCache = null;
+var gpxFetchedAt = null;
 
 async function calcGPXRoute() {
   var wpts = gpxWaypoints;
@@ -1090,6 +1091,7 @@ async function calcGPXRoute() {
       step(fetched + '/' + wpts.length + ' s\u00e4\u00e4pistett\u00e4 haettu', fetched > 0);
       if (fetched === 0) throw new Error('S\u00e4\u00e4dataa ei saatu');
       gpxForecastCache = forecastCache;
+      gpxFetchedAt = Date.now();
     } else {
       step('K\u00e4ytet\u00e4\u00e4n tallennettua s\u00e4\u00e4dataa (\u00e4l\u00e4 hae uudelleen)', true);
     }
@@ -1258,7 +1260,14 @@ function renderGPXRoute(wpts, segs, totalNM, forecastCache, startTime, logEl) {
       + '\u26a0\ufe0f ' + missingWx + ' tunnille ei saatu s\u00e4\u00e4dataa \u2014 ennuste ei kata t\u00e4t\u00e4 ajankohtaa (max 16 vrk).</div>'
     : '';
 
-  // L\u00e4ht\u00f6aika-paneeli — inline, ei modaali
+  // Laske cache-ikä
+  var cacheAgeStr = '';
+  if (gpxFetchedAt) {
+    var ageMin = Math.round((Date.now() - gpxFetchedAt) / 60000);
+    cacheAgeStr = ageMin < 1 ? 'juuri haettu' : ageMin + ' min sitten';
+  }
+
+  // Lähtöaika-paneeli — inline, ei modaali
   var curIso = toLocalISOString(startTime);
   var maxIso = toLocalISOString(new Date(Date.now() + 15*86400000));
 
@@ -1268,7 +1277,7 @@ function renderGPXRoute(wpts, segs, totalNM, forecastCache, startTime, logEl) {
 
   var timePanelHTML =
     '<div style="background:#0a4272;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
-      + '<div style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em">L\u00c4HT\u00d6AIKA — muuta ja laske uudelleen</div>'
+      + '<div style="color:rgba(255,255,255,0.7);font-size:11px;font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em">L\u00c4HT\u00d6AIKA \u2014 muuta ja laske uudelleen</div>'
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
         + '<input type="datetime-local" id="gpx-rerun-time" value="' + curIso + '" max="' + maxIso + '" '
           + 'style="flex:1;min-width:180px;padding:8px 10px;border:none;border-radius:6px;font-size:15px;font-weight:600;color:#0a4272;background:#fff;cursor:pointer" '
@@ -1282,7 +1291,14 @@ function renderGPXRoute(wpts, segs, totalNM, forecastCache, startTime, logEl) {
         + shiftBtn('+6h', 6) + shiftBtn('+12h', 12) + shiftBtn('+1vrk', 24)
         + shiftBtn('+2vrk', 48)
       + '</div>'
-      + '<div style="color:rgba(255,255,255,0.6);font-size:11px;margin-top:6px">S\u00e4\u00e4data ladattu \u2014 aikamuutos ei tee uutta API-hakua</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap;gap:6px">'
+        + '<div style="color:rgba(255,255,255,0.55);font-size:11px">'
+          + '\u23f1 S\u00e4\u00e4data: ' + cacheAgeStr + ' \u00b7 aikamuutos ei hae uudelleen'
+        + '</div>'
+        + '<button ontouchstart="" onclick="refreshGPXData()" '
+          + 'style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">'
+          + '\u2b07\ufe0f P\u00e4ivit\u00e4 s\u00e4\u00e4data</button>'
+      + '</div>'
     + '</div>';
 
   function dirArrowS(deg) {
@@ -1443,6 +1459,30 @@ window.handleGPXFile = handleGPXFile;
 window.handleGPXDrop = handleGPXDrop;
 window.handleGPXDragover = handleGPXDragover;
 window.calcGPXRoute = calcGPXRoute;
+// Pakota uusi säähaku — nollaa cache, käytä nykyistä lähtöaikaa
+function refreshGPXData() {
+  gpxForecastCache = null;
+  gpxFetchedAt = null;
+  // Lue nykyinen lähtöaika paneelista jos löytyy, muuten _gpxLastStart
+  var el = document.getElementById('gpx-rerun-time');
+  var iso = el ? el.value : window._gpxLastStart;
+  if (!iso || !gpxWaypoints) { openGPXPanel(); return; }
+  window._gpxLastStart = iso;
+  calcGPXRoute._fromRefresh = iso;
+  // Rakenna tilapäinen input elementti jota calcGPXRoute lukee
+  var tmp = document.getElementById('gpx-starttime');
+  if (!tmp) {
+    tmp = document.createElement('input');
+    tmp.id = 'gpx-starttime';
+    tmp.type = 'datetime-local';
+    tmp.style.display = 'none';
+    document.body.appendChild(tmp);
+  }
+  tmp.value = iso;
+  calcGPXRoute();
+}
+window.refreshGPXData = refreshGPXData;
+
 window.recalcGPXRoute = recalcGPXRoute;
 window.shiftGPXTime = shiftGPXTime;
 
