@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v3.8</title>
+<title>Purjehdussää v3.9</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.8</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v3.9</span>
 </div>
 
 <script>
@@ -297,7 +297,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v3.8';
+var APP_VERSION = 'v3.9';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -1315,18 +1315,18 @@ async function calcGPXRoute() {
       var key2 = 'gr_' + Math.random().toString(36).slice(2,8);
       window._gpxRows[key2] = { pos: row, wx: row.wx, si: si4, routing: rt2 };
 
-      tableHTML += '<div class="rhr" style="' + bg2 + 'cursor:pointer;flex-wrap:wrap" onclick="showGPXRowDetail(\'' + key2 + '\')">'
-        + '<span class="rhr-time" style="min-width:72px;font-size:12px">' + row.dateStr + ' ' + row.timeStr + '</span>'
-        + '<span class="rhr-wmo" style="min-width:22px">' + (WI[row.wx.wc]||'\ud83c\udf21') + '</span>'
-        + '<span class="rhr-temp" style="min-width:34px">' + Math.round(row.wx.temp) + '\u00b0</span>'
-        + '<span class="rhr-wind" style="min-width:54px">' + ws2 + ' m/s</span>'
-        + '<span class="rhr-gust" style="min-width:50px">\u2191' + gust2 + ' m/s</span>'
-        + '<span class="rhr-dir" style="min-width:68px">' + dirArrowS(row.wx.wd) + ' ' + Math.round(row.wx.wd) + '\u00b0 ' + dirCard(row.wx.wd) + '</span>'
-        + '<span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
+      tableHTML += '<div class="rhr" style="' + bg2 + 'cursor:pointer;flex-wrap:wrap;-webkit-tap-highlight-color:rgba(0,0,0,0.08)" onclick="showGPXRowDetail(\'' + key2 + '\')" ontouchend="this._touched=true" ontouchstart="">'
+        + '<span style="pointer-events:none;min-width:72px;font-size:12px;font-weight:600;color:var(--ocean)">' + row.dateStr + ' ' + row.timeStr + '</span>'
+        + '<span style="pointer-events:none;min-width:22px">' + (WI[row.wx.wc]||'\ud83c\udf21') + '</span>'
+        + '<span style="pointer-events:none;min-width:34px;font-size:13px">' + Math.round(row.wx.temp) + '\u00b0</span>'
+        + '<span style="pointer-events:none;min-width:54px;font-size:13px;font-weight:600">' + ws2 + ' m/s</span>'
+        + '<span style="pointer-events:none;min-width:50px;font-size:11px;color:var(--muted)">\u2191' + gust2 + ' m/s</span>'
+        + '<span style="pointer-events:none;min-width:68px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:2px">' + dirArrowS(row.wx.wd) + ' ' + Math.round(row.wx.wd) + '\u00b0 ' + dirCard(row.wx.wd) + '</span>'
+        + '<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
           + '\u25b6 ' + row.name + ' <span style="color:#c0c8d4">\u00b7 ' + row.distFromStart.toFixed(0) + ' M</span>'
         + '</span>'
-        + (isBeat2 ? '<span style="width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS ' + rt2.tack1 + '\u00b0\u21d4' + rt2.tack2 + '\u00b0 VMG ' + rt2.vmg.toFixed(1) + ' kts kurssi ' + Math.round(row.legBrg) + '\u00b0</span>' : '')
-        + '<span class="rhr-sail" style="color:' + si4.col + ';background:' + si4.bg + ';white-space:nowrap">' + si4.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
+        + (isBeat2 ? '<span style="pointer-events:none;width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS ' + rt2.tack1 + '\u00b0\u21d4' + rt2.tack2 + '\u00b0 \u00b7 VMG ' + rt2.vmg.toFixed(1) + ' kts \u00b7 kurssi ' + Math.round(row.legBrg) + '\u00b0</span>' : '')
+        + '<span style="pointer-events:none;font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;color:' + si4.col + ';background:' + si4.bg + '">' + si4.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1') + '</span>'
         + '</div>';
     });
 
