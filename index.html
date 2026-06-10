@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.6</title>
+<title>Purjehdussää v4.7</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.6</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.7</span>
 </div>
 
 <script>
@@ -307,10 +307,12 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.6';
+var APP_VERSION = 'v4.7';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
-var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
+// Absolut 37, 11m, ~75m² pääpurjeisto
+// Täyspurjeilla: opt 5-9 m/s | 1 reivi: 8-11 | 2 reivi: 10-13 | 3 reivi: 13+
+var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.5, SPD_FREE:6.8 };
 
 function updatePolar(field, val) {
   Q[field] = parseFloat(val);
@@ -407,34 +409,43 @@ function dirArrow(deg, size) {
   return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate(' + rotate + 'deg)" fill="none" xmlns="http://www.w3.org/2000/svg"><line x1="9" y1="15" x2="9" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="5,7 9,3 13,7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>';
 }
 
+// Purjeluindeksi — Absolut 37 / 11m, täyspurjeisto n. 75m²
+// 1-4 m/s: tyyni/liian heikko | 5-9: optimum | 8-11: 1 reivi | 10-13: 2 reiviä | 13+: 3 reiviä
 function sailCalc(ws, gust) {
   ws = ws || 0;
-  var s, lbl, col, bg, desc;
-  if (ws < 3) {
-    s=15; lbl='Tyyni'; col='#6b7a8d'; bg='#eef0f3';
-    desc='Tuuli liian heikko purjehtimiseen.';
-  } else if (ws < WIND_IDEAL_MIN) {
-    s=55; lbl='Kevyt'; col='#1a7a4a'; bg='#e6f4ec';
-    desc='Kevyt tuuli, purjehtiminen onnistuu mutta hidas.';
-  } else if (ws <= WIND_IDEAL_MAX) {
-    s=95; lbl='Paras keli ⭐'; col='#0a4272'; bg='#deeaf9';
-    desc='Ihanteellinen tuuli Quartetille – ' + WIND_IDEAL_MIN + '–' + WIND_IDEAL_MAX + ' m/s.';
-  } else if (ws < WIND_STRONG) {
-    s=75; lbl='Hyvä'; col='#1a7a4a'; bg='#e6f4ec';
-    desc='Hyvät purjehdusolosuhteet, pieni reivaus voi olla tarpeen.';
-  } else if (ws < WIND_VERY_STRONG) {
-    s=45; lbl='Kova tuuli'; col='#c45c00'; bg='#fdf0e4';
-    desc='Kova tuuli yli ' + WIND_STRONG + ' m/s. Reivaus suositeltavaa.';
+  var s, lbl, col, bg, desc, reef;
+  if (ws < 2) {
+    s=5;  lbl='Tyyni';        col='#9aa5b4'; bg='#f0f2f5'; reef='';
+    desc='Ei purjehduskelpoinen. Moottori.';
+  } else if (ws < 5) {
+    s=40; lbl='Heikko';       col='#6b7a8d'; bg='#eef0f3'; reef='';
+    desc='Hyvin hidas. Täyspurjeisto, spinnaker mahdollinen.';
+  } else if (ws <= 7) {
+    s=95; lbl='Paras keli ⭐'; col='#0a4272'; bg='#deeaf9'; reef='Täydet purjeet';
+    desc='Optimituuli Absolut 37:lle — täyspurjeisto, nopea ja tasapainoinen.';
+  } else if (ws <= 9) {
+    s=85; lbl='Erinomainen';  col='#1a5c9a'; bg='#e2ecf8'; reef='Täydet purjeet';
+    desc='Erinomainen — voi harkita 1. reiviä puuskaissa.';
+  } else if (ws <= 11) {
+    s=70; lbl='Hyvä / 1 reivi'; col='#1a7a4a'; bg='#e6f4ec'; reef='1. reivi';
+    desc='Hyvä keli, 1. reivi suositeltava. Nopea ja hallittu.';
+  } else if (ws <= 13) {
+    s=55; lbl='2 reiviä';    col='#c45c00'; bg='#fdf0e4'; reef='2. reivi';
+    desc='Kova tuuli. 2. reivi isoon, 3. fokki tai storm jib.';
+  } else if (ws <= 16) {
+    s=35; lbl='3 reiviä';    col='#b85000'; bg='#fde8dc'; reef='3. reivi';
+    desc='Erittäin kova. 3. reivi + pienin fokki tai tri. Vaativa meriolo.';
   } else {
-    s=15; lbl='Erittäin kova'; col='#b82222'; bg='#fdf0f0';
-    desc='Erittäin kova tuuli yli ' + WIND_VERY_STRONG + ' m/s. Ei suositella purjehtimista.';
+    s=10; lbl='Myrsky ⚡';   col='#b82222'; bg='#fdf0f0'; reef='Ei purjehdi';
+    desc='Yli 16 m/s — myrskyvoimainen. Ei suositella avovedellä.';
   }
-  if (gust && gust - ws > 7) {
-    s = Math.max(s - 20, 10);
+  // Puuskalisä
+  if (gust && gust - ws >= 5) {
+    s = Math.max(s - 15, 5);
     lbl += ' ⚡';
-    desc += ' Puuskat ' + gust + ' m/s – olosuhteet epävakaita.';
+    desc += ' Puuskat ' + gust + ' m/s — epävakaa.';
   }
-  return { s:s, lbl:lbl, col:col, bg:bg, desc:desc };
+  return { s:s, lbl:lbl, col:col, bg:bg, desc:desc, reef:reef||'' };
 }
 
 function windBarPct(v) { return (v / WIND_MAX_SHOW * 100).toFixed(1) + '%'; }
@@ -654,275 +665,432 @@ function totalDist(segs) {
   return segs.reduce(function(s,seg){ return s+seg.dist; }, 0);
 }
 
-// ── ROUTE VIEW ────────────────────────────────────────────
+// ── ROUTE VIEW — kilpapurjehtija-tason ensemble ───────────
+// 3 mallia: ICON-seamless + ECMWF IFS + MetNO Nordic
+// Havaintoasemat: FMI Harmaja (100539), Naissaari/Pakri EMHI via FMI
+var ROUTE_WP = [
+  { name:'Harmaja',            lat:60.1054, lon:24.9757, fmisid:'100539' },
+  { name:'Porkkala',           lat:59.9841, lon:24.3979, fmisid:null },
+  { name:'Suomenlahti keski',  lat:59.7500, lon:24.6500, fmisid:null },
+  { name:'Naissaari',          lat:59.5660, lon:24.5220, fmisid:'101011' },
+  { name:'Tallinna / Pirita',  lat:59.4627, lon:24.8328, fmisid:null }
+];
+
+// Estonian wx observation (EMHI via open-meteo current_weather endpoint)
+async function fetchEstonianObs(lat, lon) {
+  try {
+    var url = 'https://api.open-meteo.com/v1/forecast'
+      + '?latitude=' + lat + '&longitude=' + lon
+      + '&current_weather=true&windspeed_unit=ms&timezone=Europe/Helsinki';
+    var r = await fetch(url);
+    var d = await r.json();
+    if (d && d.current_weather) return d.current_weather;
+  } catch(e) {}
+  return null;
+}
+
 async function showRouteView(btn) {
   routeMode = true;
   document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   document.getElementById('loc-input').value = 'Helsinki \u2192 Tallinna reitti';
 
-  // Diagnostinen log-näkymä
   var logEl = document.getElementById('main-content');
   var steps = [];
   function step(msg, ok) {
-    steps.push({ msg: msg, ok: ok });
+    steps.push({ msg:msg, ok:ok });
     logEl.innerHTML = '<div style="padding:16px;font-family:monospace;font-size:12px">'
-      + steps.map(function(s){ return '<div style="color:' + (s.ok===false?'red':s.ok===true?'green':'#888') + ';padding:3px 0">'
-        + (s.ok===true?'✓ ':s.ok===false?'✗ ':'⟳ ') + s.msg + '</div>'; }).join('')
-      + '</div>';
+      + steps.map(function(s){ return '<div style="color:'+(s.ok===false?'red':s.ok===true?'#1a7a4a':'#888')+';padding:3px 0">'
+        +(s.ok===true?'\u2713 ':s.ok===false?'\u2717 ':'\u27f3 ')+s.msg+'</div>'; }).join('')+'</div>';
   }
 
-  step('Aloitetaan...', null);
-
   try {
-    // Vaihe 1: Perusrakenteet
-    step('Lasketaan reittigeometria', null);
+    step('Lasketaan reittigeometria...', null);
     var segsAB = buildRouteSegments(ROUTE_WP);
     var segsBA = buildRouteSegments(ROUTE_WP.slice().reverse());
     var totalNM = totalDist(segsAB);
-    step('Reittigeometria OK — ' + totalNM.toFixed(1) + ' M', true);
+    step('Geometria OK — '+totalNM.toFixed(1)+' M, '+segsAB.length+' jalkaa', true);
 
-    // Vaihe 2: Yksi testihaku
-    step('Testataan API (Harmaja)...', null);
-    var testUrl = 'https://api.open-meteo.com/v1/forecast'
-      + '?latitude=60.1054&longitude=24.9757'
-      + '&hourly=windspeed_10m,winddirection_10m,temperature_2m,weathercode'
-      + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
-    var ctrl = new AbortController();
-    setTimeout(function(){ ctrl.abort(); }, 10000);
-    var r = await fetch(testUrl, { signal: ctrl.signal });
-    var d = await r.json();
-    if (!d.hourly) throw new Error('API ei palauttanut hourly-dataa');
-    step('API OK — ' + d.hourly.time.length + ' tuntia dataa', true);
+    // Hae 3 mallia jokaiselle reittipisteelle
+    var MODELS = [
+      { key:'icon',   model:'icon_seamless',  label:'ICON' },
+      { key:'ecmwf',  model:'ecmwf_ifs025',   label:'ECMWF' },
+      { key:'metno',  model:'metno_nordic',   label:'MetNO' }
+    ];
+    step('Haetaan 3 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
 
-    // Vaihe 3: Hae kaikki 5 pistettä
-    step('Haetaan 5 reittipistettä rinnakkain...', null);
-    var forecastCache = {};
-    var fetches = ROUTE_WP.map(function(wp) {
-      var url = 'https://api.open-meteo.com/v1/forecast'
-        + '?latitude=' + wp.lat.toFixed(4) + '&longitude=' + wp.lon.toFixed(4)
-        + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-        + '&windspeed_unit=ms&timezone=Europe/Helsinki&models=icon_seamless&forecast_days=16';
-      var c = new AbortController();
-      setTimeout(function(){ c.abort(); }, 12000);
-      return fetch(url, { signal: c.signal })
-        .then(function(r){ return r.json(); })
-        .then(function(d){ if (d && d.hourly) forecastCache[wp.lat.toFixed(2)+'_'+wp.lon.toFixed(2)] = d; })
-        .catch(function(){});
-    });
-    await Promise.all(fetches);
-    var fetched = Object.keys(forecastCache).length;
-    step(fetched + '/5 pistettä haettu', fetched > 0);
-    if (fetched === 0) throw new Error('Yhtään pistettä ei saatu haettua');
+    // routeCache[wpIdx][modelKey] = hourly data
+    var routeCache = {};
+    ROUTE_WP.forEach(function(wp, i){ routeCache[i] = {}; });
 
-    // Vaihe 4: Rakenna rivit
-    step('Rakennetaan reittitaulukko...', null);
-    var Q_LOCAL = Q; // käytä globaalia polaarista
-    function routingCalc(twd, hdg) {
-      if (twd==null||isNaN(twd)) return {mode:'free',speed:5.0,vmg:5.0,twa:90,tack1:null,tack2:null};
-      var twa=(twd-hdg+360)%360; if(twa>180)twa=360-twa;
-      if (twa>=Q.TWA_MAX) {
-        var spd=twa<60?Q.SPD_CLOSE+(Q.SPD_REACH-Q.SPD_CLOSE)*(twa-Q.TWA_MAX)/(60-Q.TWA_MAX):twa<120?Q.SPD_REACH+(Q.SPD_FREE-Q.SPD_REACH)*(twa-60)/60:Q.SPD_FREE;
-        return {mode:'free',speed:spd,vmg:spd,twa:twa,tack1:null,tack2:null};
-      }
-      var vmg=Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180);
-      var h1=(twd-Q.TWA_MAX+360)%360, h2=(twd+Q.TWA_MAX)%360;
-      var e1=Math.abs(((h1-hdg+180+360)%360)-180), e2=Math.abs(((h2-hdg+180+360)%360)-180);
-      return {mode:'beat',speed:Q.SPD_CLOSE,vmg:vmg,twa:twa,
-        tack1:e1<=e2?Math.round(h1):Math.round(h2),
-        tack2:e1<=e2?Math.round(h2):Math.round(h1),
-        extraFactor:1/Math.cos(Q.TWA_MAX*Math.PI/180)};
-    }
-    function extractWx(data, dateKey, clockH) {
-      if (!data||!data.hourly) return null;
-      var H=data.hourly, target=dateKey+'T'+String(clockH).padStart(2,'0')+':00';
-      for (var i=0;i<H.time.length;i++) {
-        if (H.time[i]===target) return {
-          ws:H.windspeed_10m[i], wd:H.winddirection_10m[i],
-          gust:H.windgusts_10m?H.windgusts_10m[i]:H.windspeed_10m[i]*1.3,
-          temp:H.temperature_2m[i], wc:H.weathercode[i],
-          spread:0, wsMetno:null, wsEcmwf:null, wsIcon:H.windspeed_10m[i]
-        };
-      }
-      return null;
-    }
-    function getNearestCache(lat, lon) {
-      var best=null, bd=9999;
-      Object.keys(forecastCache).forEach(function(k) {
-        var parts=k.split('_'), la=parseFloat(parts[0]), lo=parseFloat(parts[1]);
-        var dist=Math.abs(la-lat)+Math.abs(lo-lon);
-        if (dist<bd){bd=dist;best=forecastCache[k];}
+    var allFetches = [];
+    ROUTE_WP.forEach(function(wp, wi) {
+      MODELS.forEach(function(mdl) {
+        var url = 'https://api.open-meteo.com/v1/forecast'
+          + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
+          + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
+          + '&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model+'&forecast_days=16';
+        var c = new AbortController();
+        setTimeout(function(){ c.abort(); }, 15000);
+        allFetches.push(
+          fetch(url, { signal:c.signal })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d && d.hourly) routeCache[wi][mdl.key] = d; })
+            .catch(function(){})
+        );
       });
-      return best;
-    }
-    function buildRows(segs, dateKey, cogDeg) {
-      var rows=[], cumNM=0;
-      for (var h=0;h<26;h++) {
-        if (cumNM>=totalNM) break;
-        var real=Math.min(cumNM,totalNM);
-        var pos=posAtTime(segs,1.0,real);
-        var clockH=(9+h)%24;
-        var posObj={h:h,clockH:clockH,clockStr:String(clockH).padStart(2,'0')+':00',
-          lat:pos.lat,lon:pos.lon,name:pos.name,distFromStart:real,arrived:real>=totalNM-0.1};
-        var data=getNearestCache(pos.lat,pos.lon);
-        var wx=data?extractWx(data,dateKey,clockH):null;
-        var routing=null;
-        if (wx&&!isNaN(wx.wd)){routing=routingCalc(wx.wd,cogDeg);wx.routing=routing;cumNM+=routing.vmg;}
-        else cumNM+=5.0;
-        rows.push({pos:posObj,wx:wx});
-      }
-      var lp=posAtTime(segs,1.0,totalNM), lh=rows.length>0?rows[rows.length-1].pos.h+1:12;
-      rows.push({pos:{h:lh,clockH:(9+lh)%24,clockStr:String((9+lh)%24).padStart(2,'0')+':00',
-        lat:lp.lat,lon:lp.lon,name:lp.name,distFromStart:totalNM,arrived:true},wx:null});
-      return rows;
-    }
+    });
+    await Promise.all(allFetches);
 
-    var COG_AB = bearingDeg(ROUTE_WP[0].lat,ROUTE_WP[0].lon,ROUTE_WP[ROUTE_WP.length-1].lat,ROUTE_WP[ROUTE_WP.length-1].lon);
-    var COG_BA = bearingDeg(ROUTE_WP[ROUTE_WP.length-1].lat,ROUTE_WP[ROUTE_WP.length-1].lon,ROUTE_WP[0].lat,ROUTE_WP[0].lon);
-    var rowsAB = buildRows(segsAB, '2026-06-12', COG_AB);
-    var rowsBA = buildRows(segsBA, '2026-06-14', COG_BA);
-    step('Rivit rakennettu: meno=' + rowsAB.length + ' paluu=' + rowsBA.length, true);
+    var totalFetched = 0;
+    ROUTE_WP.forEach(function(_,i){ totalFetched += Object.keys(routeCache[i]).length; });
+    step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui', totalFetched > 0);
 
-    // Vaihe 5: Renderöi
-    step('Renderöidään...', null);
-    window._routeRows = {};
+    // Havaintodata: FMI Harmaja + Naissaari
+    step('Haetaan havaintodata (Harmaja + Naissaari)...', null);
+    var fmiObs = await fetchFMIobs();
+    var naissaariObs = await fetchEstonianObs(59.5660, 24.5220);
+    var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari':'');
+    step('Havainnot: '+(obsStr||'ei saatavilla'), true);
 
-    function dirArrowS(deg) {
-      var rot=(deg+180)%360;
-      return '<svg width="13" height="13" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate('+rot+'deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="15" x2="9" y2="3"/><polyline points="5,7 9,3 13,7"/></svg>';
-    }
-
-    function renderLeg(rows, title, date) {
-      var worst={s:100,col:'#1a7a4a',bg:'#e6f4ec',lbl:'Kevyt'};
-      rows.forEach(function(r){if(r.wx){var si=sailCalc(Math.round(r.wx.ws),Math.round(r.wx.gust||r.wx.ws));if(si.s<worst.s)worst=si;}});
-      var html='<div class="route-leg"><div class="route-leg-head" onclick="toggleLeg(this)">'
-        +'<div><div class="route-leg-name">'+title+'</div>'
-        +'<div class="route-leg-date">'+date+' \u00b7 09:00 \u00b7 '+totalNM.toFixed(0)+' M</div></div>'
-        +'<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
-        +'</div><div class="route-hours">'
-        +'<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:700;color:var(--muted);padding:5px 14px">'
-        +'<span style="min-width:42px">KLO</span><span style="min-width:22px"></span>'
-        +'<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
-        +'<span style="min-width:50px">PUUSKA</span><span style="min-width:68px">SUUNTA</span>'
-        +'<span style="flex:1">SIJAINTI</span><span>KELI</span></div>';
-      var lastWasArrival = false;
-      rows.forEach(function(row) {
-        var pos=row.pos, wx=row.wx;
-        if (pos.arrived&&!wx) {
-          if (!lastWasArrival) {
-            html+='<div class="rhr" style="background:#eef8ee;padding:10px 14px">'
-              +'<span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">'
-              +'\u2693\ufe0f Perillä: '+pos.name+' \u00b7 '+pos.distFromStart.toFixed(0)+' M'
-              +'</span></div>';
+    // Rakenna ensemble-data: mediaani/spread kolmesta mallista
+    function ensembleWx(wi, dt) {
+      var wds = [], wss = [], gusts = [], temps = [], wcs = [];
+      MODELS.forEach(function(mdl) {
+        var d = routeCache[wi][mdl.key];
+        if (!d||!d.hourly) return;
+        var H = d.hourly;
+        var fmt = new Intl.DateTimeFormat('fi-FI', {
+          timeZone:'Europe/Helsinki', year:'numeric', month:'2-digit',
+          day:'2-digit', hour:'2-digit', hour12:false
+        });
+        var parts = fmt.formatToParts(dt), pp = {};
+        parts.forEach(function(p){ pp[p.type]=p.value; });
+        var target = pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':00';
+        for (var i=0; i<H.time.length; i++) {
+          if (H.time[i]===target) {
+            wss.push(H.windspeed_10m[i]);
+            wds.push(H.winddirection_10m[i]);
+            gusts.push(H.windgusts_10m ? H.windgusts_10m[i] : H.windspeed_10m[i]*1.3);
+            temps.push(H.temperature_2m[i]);
+            wcs.push(H.weathercode[i]);
+            break;
           }
+        }
+      });
+      if (!wss.length) return null;
+      // Tuulensuunta: vektorikeskiarvo
+      var sinSum=0, cosSum=0;
+      wds.forEach(function(d){ sinSum+=Math.sin(d*Math.PI/180); cosSum+=Math.cos(d*Math.PI/180); });
+      var wdMean = (Math.atan2(sinSum/wds.length, cosSum/wds.length)*180/Math.PI+360)%360;
+      var wsMean = wss.reduce(function(a,b){return a+b;},0)/wss.length;
+      var wsMax  = Math.max.apply(null, wss);
+      var wsMin  = Math.min.apply(null, wss);
+      var spread = wsMax - wsMin;
+      var gustMean = gusts.reduce(function(a,b){return a+b;},0)/gusts.length;
+      var tempMean = temps.reduce(function(a,b){return a+b;},0)/temps.length;
+      // Pahin sää
+      var wc = wcs.reduce(function(a,b){ return b>a?b:a; }, 0);
+      return {
+        ws:wsMean, wd:wdMean, gust:gustMean, temp:tempMean, wc:wc,
+        spread:spread, wsMin:wsMin, wsMax:wsMax,
+        models: wss.length,
+        icon:  routeCache[wi]['icon']  ? wss[MODELS.findIndex(function(m){return m.key==='icon';})]  : null,
+        ecmwf: routeCache[wi]['ecmwf'] ? wss[MODELS.findIndex(function(m){return m.key==='ecmwf';})] : null,
+        metno: routeCache[wi]['metno'] ? wss[MODELS.findIndex(function(m){return m.key==='metno';})] : null
+      };
+    }
+
+    // Hae lähimmän WP:n ensemble-data
+    function getEnsembleForPos(lat, lon, dt) {
+      var best=-1, bd=9999;
+      ROUTE_WP.forEach(function(wp,i){
+        var d=Math.abs(wp.lat-lat)+Math.abs(wp.lon-lon);
+        if(d<bd){bd=d;best=i;}
+      });
+      if (best<0) return null;
+      return ensembleWx(best, dt);
+    }
+
+    step('Rakennetaan reittitaulukko (ensemble)...', null);
+
+    function renderRouteEnsemble(segs, startTime, legTitle, legSubtitle) {
+      var rows = [];
+      var cumNM = 0;
+      var curTime = new Date(startTime.getTime());
+      var maxHours = 72;
+
+      function fmtH(dt) {
+        return new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',hour:'2-digit',minute:'2-digit',hour12:false}).format(dt);
+      }
+      function fmtD(dt) {
+        return new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',day:'numeric',month:'numeric'}).format(dt);
+      }
+
+      for (var h=0; h<maxHours; h++) {
+        if (cumNM >= totalNM) break;
+        var pos = posAtTime(segs, 1.0, cumNM);
+        var segIdx=0, segCum=0;
+        for (var si2=0; si2<segs.length; si2++) {
+          if (segCum+segs[si2].dist >= cumNM){ segIdx=si2; break; }
+          segCum += segs[si2].dist;
+        }
+        var legBrg = segs[segIdx].brg;
+        var wx = getEnsembleForPos(pos.lat, pos.lon, curTime);
+        var routing = null, vmg = 5.0;
+        if (wx && !isNaN(wx.wd)) {
+          routing = gpxRoutingCalc(wx.wd, legBrg);
+          vmg = routing.vmg;
+        }
+        rows.push({ timeStr:fmtH(curTime), dateStr:fmtD(curTime),
+          lat:pos.lat, lon:pos.lon, name:pos.name,
+          distFromStart:cumNM, legBrg:legBrg,
+          wx:wx, routing:routing, arrived:false });
+        cumNM = Math.min(cumNM + vmg, totalNM);
+        curTime = new Date(curTime.getTime() + 3600000);
+      }
+      // Saapuminen
+      var arrPos = posAtTime(segs, 1.0, totalNM);
+      var etaH = rows.length;
+      rows.push({ timeStr:fmtH(curTime), dateStr:fmtD(curTime),
+        lat:arrPos.lat, lon:arrPos.lon, name:segs[segs.length-1].to.name,
+        distFromStart:totalNM, wx:null, routing:null, arrived:true });
+
+      var etaStr = etaH+'h';
+      if (etaH>=24) etaStr = Math.floor(etaH/24)+'vrk '+(etaH%24)+'h';
+
+      var worst={s:100,col:'#1a7a4a',bg:'#e6f4ec',lbl:'Kevyt'};
+      rows.forEach(function(r){ if(r.wx){ var si=sailCalc(Math.round(r.wx.ws),Math.round(r.wx.gust||r.wx.ws)); if(si.s<worst.s)worst=si; } });
+
+      var startDateStr = new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',day:'numeric',month:'numeric',year:'numeric'}).format(startTime);
+      var startHHMM   = new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',hour:'2-digit',minute:'2-digit',hour12:false}).format(startTime);
+      var arrRow = rows[rows.length-1];
+
+      function dirArrowS(deg) {
+        var rot=(deg+180)%360;
+        return '<svg width="13" height="13" viewBox="0 0 18 18" style="display:inline-block;vertical-align:middle;transform:rotate('+rot+'deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="15" x2="9" y2="3"/><polyline points="5,7 9,3 13,7"/></svg>';
+      }
+
+      var html = '<div class="route-leg">'
+        +'<div class="route-leg-head" onclick="toggleLeg(this)">'
+          +'<div><div class="route-leg-name">'+legTitle+'</div>'
+          +'<div class="route-leg-date">'+startDateStr+' klo '+startHHMM+' \u00b7 '+totalNM.toFixed(0)+' M \u00b7 ETA '+etaStr+' \u00b7 perillä '+arrRow.dateStr+' '+arrRow.timeStr+'</div></div>'
+          +'<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
+        +'</div>'
+        +'<div class="route-hours">'
+        +'<div class="rhr" style="background:#f0f4f8;font-size:10px;font-weight:700;color:var(--muted);padding:5px 14px">'
+          +'<span style="min-width:72px">PVM/KLO</span><span style="min-width:22px"></span>'
+          +'<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
+          +'<span style="min-width:44px">PUUSKA</span><span style="min-width:64px">SUUNTA</span>'
+          +'<span style="min-width:40px">HAJON</span><span style="flex:1">SIJAINTI</span><span>KELI/REIVI</span></div>';
+
+      window._routeRows = window._routeRows || {};
+      rows.forEach(function(row) {
+        if (row.arrived) {
+          html += '<div class="rhr" style="background:#eef8ee;padding:10px 14px">'
+            +'<span style="flex:1;font-size:13px;font-weight:600;color:#1a7a4a">'
+            +'\u2693\ufe0f Perillä: '+row.name+' \u00b7 '+row.dateStr+' klo '+row.timeStr+' \u00b7 '+totalNM.toFixed(0)+' M \u00b7 '+etaStr
+            +'</span></div>';
           return;
         }
-        if (!wx) return;
-        var ws=Math.round(wx.ws), gust=Math.round(wx.gust||wx.ws);
-        var si=sailCalc(ws,gust);
-        var rt=wx.routing, isBeat=rt&&rt.mode==='beat';
-        var bg=pos.arrived?'background:#eef8ee;':isBeat?'background:#fffbf0;':'';
+        if (!row.wx) return;
+        var ws2=Math.round(row.wx.ws), gust2=Math.round(row.wx.gust||row.wx.ws);
+        var si=sailCalc(ws2, gust2);
+        var rt=row.routing, isBeat=rt&&rt.mode==='beat';
+        var bg=isBeat?'background:#fffbf0;':'';
+        // Spread-värikoodi
+        var sp=row.wx.spread||0;
+        var spCol = sp<1.5?'#1a7a4a':sp<3?'#b87c1a':'#b82222';
+        var spTxt = sp.toFixed(1);
         var key='rr_'+Math.random().toString(36).slice(2,8);
-        window._routeRows[key]={pos:pos,wx:wx,si:si,routing:rt};
-        html+='<div class="rhr" style="'+bg+'cursor:pointer;flex-wrap:wrap" onclick="showRouteRowDetail(\''+key+'\')">'
-          +'<span class="rhr-time">'+pos.clockStr+'</span>'
-          +'<span class="rhr-wmo" style="min-width:22px">'+(WI[wx.wc]||'\ud83c\udf21')+'</span>'
-          +'<span class="rhr-temp" style="min-width:34px">'+Math.round(wx.temp)+'\u00b0</span>'
-          +'<span class="rhr-wind" style="min-width:54px">'+ws+' m/s</span>'
-          +'<span class="rhr-gust" style="min-width:50px">\u2191'+gust+' m/s</span>'
-          +'<span class="rhr-dir" style="min-width:68px">'+dirArrowS(wx.wd)+' '+Math.round(wx.wd)+'\u00b0 '+dirCard(wx.wd)+'</span>'
-          +'<span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'
-            +(pos.arrived?'\u2693\ufe0f ':'\u25b6 ')+pos.name+' <span style="color:#c0c8d4">\u00b7 '+pos.distFromStart.toFixed(0)+' M</span>'
-          +'</span>'
-          +(isBeat?'<span style="width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS '+rt.tack1+'\u00b0\u21d4'+rt.tack2+'\u00b0 VMG '+rt.vmg.toFixed(1)+' kts</span>':'')
-          +'<span class="rhr-sail" style="color:'+si.col+';background:'+si.bg+';white-space:nowrap">'+si.lbl.replace(' \u2b50','').replace(' \u26a1','\u26a1')+'</span>'
+        window._routeRows[key]={row:row, si:si};
+        html += '<div class="rhr" style="'+bg+'cursor:pointer;flex-wrap:wrap;-webkit-tap-highlight-color:rgba(0,0,0,0.08)" onclick="showRouteRowDetail(\''+key+'\')" ontouchstart="">'
+          +'<span style="pointer-events:none;min-width:72px;font-size:12px;font-weight:600;color:var(--ocean)">'+row.dateStr+' '+row.timeStr+'</span>'
+          +'<span style="pointer-events:none;min-width:22px">'+(WI[row.wx.wc]||'\ud83c\udf21')+'</span>'
+          +'<span style="pointer-events:none;min-width:34px;font-size:13px">'+Math.round(row.wx.temp)+'\u00b0</span>'
+          +'<span style="pointer-events:none;min-width:54px;font-size:13px;font-weight:600">'+ws2+' m/s</span>'
+          +'<span style="pointer-events:none;min-width:44px;font-size:11px;color:var(--muted)">\u2191'+gust2+'</span>'
+          +'<span style="pointer-events:none;min-width:64px;font-size:12px;display:inline-flex;align-items:center;gap:2px;color:var(--muted)">'+dirArrowS(row.wx.wd)+' '+Math.round(row.wx.wd)+'\u00b0 '+dirCard(row.wx.wd)+'</span>'
+          +'<span style="pointer-events:none;min-width:40px;font-size:11px;font-weight:600;color:'+spCol+'">\u00b1'+spTxt+'</span>'
+          +'<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">\u25b6 '+row.name+' <span style="color:#c0c8d4">\u00b7 '+row.distFromStart.toFixed(0)+' M</span></span>'
+          +(isBeat?'<span style="pointer-events:none;width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS '+rt.tack1+'\u00b0\u21d4'+rt.tack2+'\u00b0 \u00b7 VMG '+rt.vmg.toFixed(1)+' kts \u00b7 '+Math.round(row.legBrg)+'\u00b0</span>':'')
+          +'<span style="pointer-events:none;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;white-space:nowrap;color:'+si.col+';background:'+si.bg+'">'+si.lbl.replace(' \u2b50','')+(si.reef?' | '+si.reef:'')+'</span>'
           +'</div>';
-        lastWasArrival = pos.arrived;
       });
-      html+='</div></div>';
-      return html;
+      html += '</div></div>';
+      return { html:html, rows:rows };
     }
 
-    // FMI obs
-    var fmiObs = await fetchFMIobs();
-    var fmiHtml = fmiObs&&!isNaN(fmiObs.windspeed)
-      ? '<div class="fmi-obs-card"><div class="fmi-obs-title"><span class="fmi-live"></span> FMI Harmaja</div>'
-        +'<div class="fmi-obs-grid">'
-        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Tuuli</div><div class="fmi-obs-v">'+fmiObs.windspeed.toFixed(1)+'<span class="fmi-obs-u"> m/s</span></div></div>'
-        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Puuska</div><div class="fmi-obs-v">'+(isNaN(fmiObs.windgust)?'–':fmiObs.windgust.toFixed(1))+'<span class="fmi-obs-u"> m/s</span></div></div>'
-        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Suunta</div><div class="fmi-obs-v">'+(isNaN(fmiObs.winddirection)?'–':Math.round(fmiObs.winddirection)+'\u00b0 '+dirCard(fmiObs.winddirection))+'</div></div>'
-        +'</div></div>'
-      : '<div class="fmi-obs-card" style="background:#f8f9fa;border-color:#dde2ea"><div class="fmi-obs-title" style="color:var(--muted)">\u26a0\ufe0f FMI Harmaja – ei saatavilla</div></div>';
+    // Lähtöajat
+    var startAB = new Date(); startAB.setHours(9,0,0,0); startAB.setDate(startAB.getDate()+2);
+    var startBA = new Date(startAB.getTime() + 2*86400000);
 
-    document.getElementById('main-content').innerHTML =
+    var legAB = renderRouteEnsemble(segsAB, startAB, 'Lähtö: Helsinki \u2192 Tallinna', 'MENNESSÄ');
+    var legBA = renderRouteEnsemble(segsBA, startBA, 'Paluu: Tallinna \u2192 Helsinki', 'PALUUSSA');
+
+    // Havaintopaneeli
+    function obsCard(label, obs, isEstonian) {
+      if (!obs) return '<div style="background:#f8f9fa;border:1px solid #dde2ea;border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted)">\u26a0\ufe0f '+label+' \u2014 ei saatavilla</div>';
+      var ws = isEstonian ? obs.windspeed : (obs.windspeed||0);
+      var wd = isEstonian ? obs.winddirection : (obs.winddirection||0);
+      var gust = isEstonian ? (obs.windspeed*1.3) : (obs.windgust||obs.windspeed*1.3);
+      var si = sailCalc(Math.round(ws), Math.round(gust));
+      return '<div class="fmi-obs-card">'
+        +'<div class="fmi-obs-title"><span class="fmi-live"></span> '+label+'</div>'
+        +'<div class="fmi-obs-grid">'
+        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Tuuli</div><div class="fmi-obs-v">'+ws.toFixed(1)+'<span class="fmi-obs-u"> m/s</span></div></div>'
+        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Puuska</div><div class="fmi-obs-v">'+gust.toFixed(1)+'<span class="fmi-obs-u"> m/s</span></div></div>'
+        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Suunta</div><div class="fmi-obs-v">'+Math.round(wd)+'\u00b0 '+dirCard(wd)+'</div></div>'
+        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Keli nyt</div><div class="fmi-obs-v" style="color:'+si.col+'">'+si.lbl.replace(' \u2b50','')+'</div></div>'
+        +'</div></div>';
+    }
+
+    // Lähtöaikapaneeli (sama kuin GPX, mutta erilliset muuttujat)
+    function routeShiftBtn(label, dh, dir) {
+      return '<button ontouchstart="" onclick="shiftRouteTime(\''+dir+'\','+dh+')" style="background:rgba(255,255,255,0.85);border:1px solid #b0c8e8;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;color:#0a4272;cursor:pointer;white-space:nowrap">'+label+'</button>';
+    }
+    window._routeStartAB = toLocalISOString(startAB);
+    window._routeStartBA = toLocalISOString(startBA);
+    window._routeCache   = routeCache;
+
+    var startABiso = toLocalISOString(startAB);
+    var startBAiso = toLocalISOString(startBA);
+    var maxIso = toLocalISOString(new Date(Date.now()+15*86400000));
+
+    var timePanelAB =
+      '<div style="background:#0a4272;border-radius:10px;padding:10px 14px;margin-bottom:8px">'
+        +'<div style="color:rgba(255,255,255,0.7);font-size:10px;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">MENO \u2014 lähtöaika</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+          +'<input type="datetime-local" id="route-time-ab" value="'+startABiso+'" max="'+maxIso+'" '
+            +'style="flex:1;min-width:170px;padding:7px 10px;border:none;border-radius:6px;font-size:14px;font-weight:600;color:#0a4272;background:#fff" '
+            +'oninput="window._routeStartAB=this.value" onchange="window._routeStartAB=this.value">'
+          +'<button ontouchstart="" onclick="rerunRouteView()" style="background:#b87c1a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer">\u21bb Laske</button>'
+        +'</div>'
+        +'<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">'
+          +routeShiftBtn('+6h',6,'ab')+routeShiftBtn('+12h',12,'ab')+routeShiftBtn('+1vrk',24,'ab')+routeShiftBtn('+2vrk',48,'ab')
+        +'</div>'
+      +'</div>';
+
+    // Spread-selite
+    var spreadLegend = '<div style="display:flex;gap:10px;font-size:11px;margin-bottom:8px;flex-wrap:wrap">'
+      +'<span>\u00b1 = mallien hajonta (ICON+ECMWF+MetNO)</span>'
+      +'<span style="color:#1a7a4a">\u25cf &lt;1.5 m/s = hyvä yksimielisyys</span>'
+      +'<span style="color:#b87c1a">\u25cf 1.5–3 m/s = kohtalainen</span>'
+      +'<span style="color:#b82222">\u25cf &gt;3 m/s = suuri epävarmuus</span>'
+      +'</div>';
+
+    logEl.innerHTML =
       '<div class="route-header">'
         +'<div class="route-title">\u26f5 Helsinki \u2013 Tallinna \u00b7 Reittiennuste</div>'
-        +'<div class="route-sub">ICON-seamless \u00b7 VMG-reititys \u00b7 '+totalNM.toFixed(0)+' M</div>'
+        +'<div class="route-sub">3-mallin ensemble: ICON-seamless + ECMWF IFS + MetNO Nordic \u00b7 '+totalNM.toFixed(0)+' M</div>'
       +'</div>'
-      +'<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:12px">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +timePanelAB
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+        +obsCard('FMI Harmaja \u2014 havainto nyt', fmiObs, false)
+        +obsCard('Naissaari \u2014 havainto nyt', naissaariObs, true)
+      +'</div>'
+      +'<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:12px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
           +'<div style="font-weight:700;color:#0a4272">\u26f5 Quartet Absolut 37 \u2014 polaarinen</div>'
-          +'<button onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">Säädä \u2699\ufe0f</button>'
+          +'<button ontouchstart="" onclick="openPolarPanel()" style="background:#0a4272;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">Säädä \u2699\ufe0f</button>'
         +'</div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">'
-          +'<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">Nousukulma</div><div style="font-size:16px;font-weight:700;color:#0a4272" id="polar_display_twa">'+Q.TWA_MAX+'\u00b0</div></div>'
-          +'<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">VMG nousu</div><div style="font-size:16px;font-weight:700;color:#0a4272" id="polar_display_vmg">'+(Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180)).toFixed(1)+' kts</div></div>'
-          +'<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">Traverssi</div><div style="font-size:16px;font-weight:700;color:#0a4272" id="polar_display_reach">'+Q.SPD_REACH+' kts</div></div>'
-          +'<div style="background:#fff;border-radius:6px;padding:7px;text-align:center"><div style="font-size:10px;color:#6b7a8d">Vapaatuuli</div><div style="font-size:16px;font-weight:700;color:#0a4272" id="polar_display_free">'+Q.SPD_FREE+' kts</div></div>'
+        +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">'
+          +'<div style="background:#fff;border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:#6b7a8d">Nousukulma</div><div style="font-size:15px;font-weight:700;color:#0a4272" id="polar_display_twa">'+Q.TWA_MAX+'\u00b0</div></div>'
+          +'<div style="background:#fff;border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:#6b7a8d">VMG nousu</div><div style="font-size:15px;font-weight:700;color:#0a4272" id="polar_display_vmg">'+(Q.SPD_CLOSE*Math.cos(Q.TWA_MAX*Math.PI/180)).toFixed(1)+' kts</div></div>'
+          +'<div style="background:#fff;border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:#6b7a8d">Traverssi</div><div style="font-size:15px;font-weight:700;color:#0a4272" id="polar_display_reach">'+Q.SPD_REACH+' kts</div></div>'
+          +'<div style="background:#fff;border-radius:6px;padding:6px;text-align:center"><div style="font-size:9px;color:#6b7a8d">Vapaatuuli</div><div style="font-size:15px;font-weight:700;color:#0a4272" id="polar_display_free">'+Q.SPD_FREE+' kts</div></div>'
         +'</div>'
-        +'<div style="margin-top:8px;color:#4a6a8a;font-size:11px">'
-          +'\ud83d\udfe1 Keltainen = halssaus tarpeen \u00b7 Napauta rivi\u00e4 n\u00e4hd\u00e4ksesi halssikurssit'
-        +'</div>'
+        +'<div style="margin-top:6px;font-size:10px;color:#4a6a8a">Reivipisteet: täydet &lt;9 m/s \u00b7 1. reivi 8–11 \u00b7 2. reivi 10–13 \u00b7 3. reivi 13+</div>'
       +'</div>'
-      +fmiHtml
-      +'<div class="sec-label">Mennessä \u00b7 Pe 12.6. \u00b7 09:00</div>'
-      +renderLeg(rowsAB,'Lähtö: Helsinki \u2192 Tallinna','Pe 12.6.2026')
-      +'<div class="sec-label" style="margin-top:16px">Paluussa \u00b7 Su 14.6. \u00b7 09:00</div>'
-      +renderLeg(rowsBA,'Paluu: Tallinna \u2192 Helsinki','Su 14.6.2026')
-      +'<div class="update-info">ICON-seamless (Open-Meteo) \u00b7 FMI WFS \u00b7 '+APP_VERSION+'</div>';
+      +spreadLegend
+      +'<div class="sec-label">MENNESSÄ \u00b7 '+new Intl.DateTimeFormat('fi-FI',{day:'numeric',month:'numeric',year:'numeric'}).format(startAB)+' klo '+new Intl.DateTimeFormat('fi-FI',{hour:'2-digit',minute:'2-digit',hour12:false}).format(startAB)+'</div>'
+      +legAB.html
+      +'<div class="sec-label" style="margin-top:16px">PALUUSSA \u00b7 '+new Intl.DateTimeFormat('fi-FI',{day:'numeric',month:'numeric',year:'numeric'}).format(startBA)+' klo '+new Intl.DateTimeFormat('fi-FI',{hour:'2-digit',minute:'2-digit',hour12:false}).format(startBA)+'</div>'
+      +legBA.html
+      +'<div class="update-info">3-mallin ensemble \u00b7 ICON+ECMWF+MetNO \u00b7 FMI Harmaja+Naissaari \u00b7 '+APP_VERSION+'</div>';
 
   } catch(err) {
-    document.getElementById('main-content').innerHTML =
-      '<div class="err" style="text-align:left;font-size:13px">'
+    logEl.innerHTML = '<div class="err" style="text-align:left;font-size:13px">'
       +'<strong>Virhe:</strong> '+err.message+'<br><br>'
       +'<pre style="font-size:11px;overflow:auto">'+(err.stack||'').substring(0,400)+'</pre>'
       +'<button class="retry-btn" onclick="showRouteView(null)">\u21bb Yritä uudelleen</button></div>';
   }
 }
 
-  // ── QUARTET POLAARINEN ───────────────────────────────────
-  // Käytetään globaalia Q-polaarista (määritelty sivun alussa)
+function shiftRouteTime(dir, dh) {
+  var key = dir==='ab' ? '_routeStartAB' : '_routeStartBA';
+  var cur = window[key] ? new Date(window[key]) : new Date();
+  cur = new Date(cur.getTime() + dh*3600000);
+  cur.setMinutes(0); cur.setSeconds(0); cur.setMilliseconds(0);
+  window[key] = toLocalISOString(cur);
+  var inputId = dir==='ab' ? 'route-time-ab' : 'route-time-ba';
+  var el = document.getElementById(inputId);
+  if (el) el.value = window[key];
+  rerunRouteView();
+}
 
-  function twaDeg(twd, hdg) {
-    var d = (twd - hdg + 360) % 360;
-    if (d > 180) d = 360 - d;
-    return d;
-  }
-  function quartetSpeed(twa) {
-    if (twa < Q.TWA_MAX) return Q.SPD_CLOSE;
-    if (twa < 60)  return Q.SPD_CLOSE + (Q.SPD_REACH - Q.SPD_CLOSE) * (twa - Q.TWA_MAX) / (60 - Q.TWA_MAX);
-    if (twa < 120) return Q.SPD_REACH  + (Q.SPD_FREE  - Q.SPD_REACH)  * (twa - 60) / 60;
-    return Q.SPD_FREE;
-  }
-  function routingCalc(twd, hdg_desired) {
-    if (twd == null || isNaN(twd)) return { mode:'free', speed:5.0, vmg:5.0, twa:90, tack1:null, tack2:null };
-    var twa = twaDeg(twd, hdg_desired);
-    if (twa >= Q.TWA_MAX) {
-      var spd = quartetSpeed(twa);
-      return { mode:'free', speed:spd, vmg:spd, twa:twa, tack1:null, tack2:null };
-    } else {
-      var vmg = Q.SPD_CLOSE * Math.cos(Q.TWA_MAX * Math.PI / 180);
-      var h1 = (twd - Q.TWA_MAX + 360) % 360;
-      var h2 = (twd + Q.TWA_MAX) % 360;
-      var e1 = Math.abs(((h1 - hdg_desired + 180 + 360) % 360) - 180);
-      var e2 = Math.abs(((h2 - hdg_desired + 180 + 360) % 360) - 180);
-      var best  = e1 <= e2 ? Math.round(h1) : Math.round(h2);
-      var other = e1 <= e2 ? Math.round(h2) : Math.round(h1);
-      return { mode:'beat', speed:Q.SPD_CLOSE, vmg:vmg, twa:twa,
-               tack1:best, tack2:other, extraFactor: 1/Math.cos(Q.TWA_MAX*Math.PI/180) };
-    }
-  }
+function rerunRouteView() {
+  showRouteView(document.getElementById('btn-route'));
+}
 
+window.showRouteView = showRouteView;
+window.shiftRouteTime = shiftRouteTime;
+window.rerunRouteView = rerunRouteView;
+
+// showRouteRowDetail päivitetty uudelle rakenteelle
+window.showRouteRowDetail = function(key) {
+  var d = window._routeRows && window._routeRows[key];
+  if (!d) return;
+  var row = d.row, si = d.si;
+  if (!row || !row.wx) return;
+  var wx = row.wx, rt = row.routing;
+  var ws = Math.round(wx.ws), gust = Math.round(wx.gust||wx.ws);
+  var navHtml = '';
+  if (rt && rt.mode==='beat') {
+    navHtml = '<div style="background:#fff8e8;border:2px solid #f0c040;border-radius:10px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:700;color:#b87c1a;margin-bottom:8px">\u26f5 HALSSAUS TARPEEN</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        +'<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">SB-halssi</div><div style="font-size:20px;font-weight:700;color:#0a4272">'+rt.tack1+'\u00b0</div><div style="font-size:11px;color:var(--muted)">'+dirCard(rt.tack1)+'</div></div>'
+        +'<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">BB-halssi</div><div style="font-size:20px;font-weight:700;color:#0a4272">'+rt.tack2+'\u00b0</div><div style="font-size:11px;color:var(--muted)">'+dirCard(rt.tack2)+'</div></div>'
+        +'<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">VMG</div><div style="font-size:20px;font-weight:700;color:#0a4272">'+rt.vmg.toFixed(1)+' kts</div></div>'
+        +'<div style="background:rgba(255,255,255,0.7);border-radius:8px;padding:10px"><div style="font-size:10px;color:#b87c1a">Jalkakurssi</div><div style="font-size:20px;font-weight:700;color:#0a4272">'+Math.round(row.legBrg)+'\u00b0</div></div>'
+      +'</div></div>';
+  } else if (rt) {
+    navHtml = '<div style="background:#e8f4ec;border:1px solid #a0d4b0;border-radius:10px;padding:10px;margin-bottom:12px">'
+      +'<div style="font-weight:700;color:#1a7a4a">\u2714 Vapaatuuli — suorakurssi '+Math.round(row.legBrg)+'\u00b0</div>'
+      +'<div style="font-size:12px;color:#1a7a4a">TWA '+Math.round(rt.twa)+'\u00b0 \u00b7 nopeus '+rt.speed.toFixed(1)+' kts</div></div>';
+  }
+  // Ensemble-hajontatiedot
+  var spreadHtml = '';
+  if (wx.models > 1) {
+    spreadHtml = '<div style="background:#f0f4f8;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">'
+      +'<div style="font-weight:700;color:#0a4272;margin-bottom:6px">Mallivertailu ('+wx.models+' mallia)</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center">'
+      +(wx.icon  != null ? '<div><div style="font-size:10px;color:var(--muted)">ICON</div><div style="font-weight:700">'+wx.icon.toFixed(1)+' m/s</div></div>' : '')
+      +(wx.ecmwf != null ? '<div><div style="font-size:10px;color:var(--muted)">ECMWF</div><div style="font-weight:700">'+wx.ecmwf.toFixed(1)+' m/s</div></div>' : '')
+      +(wx.metno != null ? '<div><div style="font-size:10px;color:var(--muted)">MetNO</div><div style="font-weight:700">'+wx.metno.toFixed(1)+' m/s</div></div>' : '')
+      +'</div>'
+      +'<div style="margin-top:6px;color:var(--muted)">Vaihteluväli: '+wx.wsMin.toFixed(1)+'–'+wx.wsMax.toFixed(1)+' m/s (hajonta ±'+wx.spread.toFixed(1)+')</div>'
+    +'</div>';
+  }
+  var html = navHtml + spreadHtml
+    +'<div class="sail-detail-box" style="background:'+si.bg+';margin-bottom:12px">'
+      +'<div style="font-size:11px;color:'+si.col+';margin-bottom:4px">'+row.dateStr+' '+row.timeStr+' \u00b7 '+row.name+'</div>'
+      +'<div class="sail-detail-score" style="color:'+si.col+'">'+si.s+'<span style="font-size:18px">/100</span></div>'
+      +'<div class="sail-detail-name" style="color:'+si.col+'">'+si.lbl+(si.reef?' \u00b7 '+si.reef:'')+'</div>'
+    +'</div>'
+    +'<div class="hd-grid">'
+      +'<div class="hd-stat"><div class="hd-stat-l">\ud83d\udca8 Tuuli</div><div class="hd-stat-v">'+ws+'<span class="hd-stat-u"> m/s</span></div></div>'
+      +'<div class="hd-stat"><div class="hd-stat-l">\ud83d\udca5 Puuskat</div><div class="hd-stat-v">'+gust+'<span class="hd-stat-u"> m/s</span></div></div>'
+      +'<div class="hd-stat"><div class="hd-stat-l">\ud83e\uddad Suunta</div><div class="hd-stat-v">'+Math.round(wx.wd)+'<span class="hd-stat-u">\u00b0 '+dirCard(wx.wd)+'</span></div></div>'
+      +'<div class="hd-stat"><div class="hd-stat-l">\ud83c\udf21 Lämpö</div><div class="hd-stat-v">'+Math.round(wx.temp)+'<span class="hd-stat-u">\u00b0C</span></div></div>'
+    +'</div>';
+  openModal(row.dateStr+' '+row.timeStr+' \u2014 '+row.name, html);
+};
+  routeMode = true;
+  document.querySelectorAll('.ql').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('loc-input').value = 'Helsinki \u2192 Tallinna reitti';
 
 function toggleLeg(el) {
   var hours = el.nextElementSibling;
