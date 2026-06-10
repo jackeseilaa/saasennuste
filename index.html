@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.4</title>
+<title>Purjehdussää v4.5</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.4</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.5</span>
 </div>
 
 <script>
@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.4';
+var APP_VERSION = 'v4.5';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -994,7 +994,7 @@ function openGPXPanel() {
 
     // Tiedostovalitsin
     + '<label for="gpx-file" class="gpx-drop" id="gpx-drop" ondrop="handleGPXDrop(event)" ondragover="handleGPXDragover(event)" ondragleave="this.classList.remove(\'dragover\')" style="display:block;cursor:pointer">'
-      + '<input type="file" id="gpx-file" accept=".gpx,application/gpx+xml,text/xml" onchange="handleGPXFile(event)" style="display:none">'
+      + '<input type="file" id="gpx-file" onchange="handleGPXFile(event)" style="display:none">'
       + '<div style="font-size:28px;margin-bottom:8px">📁</div>'
       + '<div style="font-size:14px;font-weight:600;color:var(--ocean)">Napauta tai vedä GPX-tiedosto tähän</div>'
       + '<div style="font-size:12px;color:var(--muted);margin-top:4px">Tukee: &lt;wpt&gt;, &lt;rtept&gt;, &lt;trkpt&gt;</div>'
@@ -1422,7 +1422,12 @@ function handleGPXDrop(e) {
 
 function handleGPXFile(e) {
   var file = e.target.files[0];
-  if (file) readGPXFile(file);
+  if (!file) return;
+  if (file.name && !file.name.toLowerCase().endsWith('.gpx') && file.size > 500000) {
+    alert('Valitse GPX-tiedosto (.gpx)');
+    return;
+  }
+  readGPXFile(file);
 }
 
 function readGPXFile(file) {
