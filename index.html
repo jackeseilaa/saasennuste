@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.5</title>
+<title>Purjehdussää v4.6</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.5</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.6</span>
 </div>
 
 <script>
@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.5';
+var APP_VERSION = 'v4.6';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
@@ -1291,8 +1291,8 @@ function renderGPXRoute(wpts, segs, totalNM, forecastCache, startTime, logEl) {
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
         + '<input type="datetime-local" id="gpx-rerun-time" value="' + curIso + '" max="' + maxIso + '" '
           + 'style="flex:1;min-width:180px;padding:8px 10px;border:none;border-radius:6px;font-size:15px;font-weight:600;color:#0a4272;background:#fff;cursor:pointer" '
-          + 'onchange="recalcGPXRoute(this.value)">'
-        + '<button ontouchstart="" onclick="recalcGPXRoute(document.getElementById(\'gpx-rerun-time\').value)" '
+          + 'oninput="window._gpxLastStart=this.value" onchange="window._gpxLastStart=this.value">'
+        + '<button ontouchstart="" onclick="recalcGPXRoute(window._gpxLastStart)" '
           + 'style="background:#b87c1a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">'
           + '\u21bb Laske</button>'
       + '</div>'
