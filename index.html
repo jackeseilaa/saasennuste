@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.3</title>
+<title>Purjehdussää v4.4</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.3</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.4</span>
 </div>
 
 <script>
@@ -225,8 +225,18 @@ function checkVersionManual() {
       b.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:9999';
       b.textContent = '\u2B06 Versio ' + remoteVer + ' saatavilla — napauta ladataksesi';
       b.onclick = function(){
-        var url = location.protocol + '//' + location.host + location.pathname + '?r=' + Date.now();
-        window.location.replace(url);
+        // Tyhjennä service worker -cache jos saatavilla, sitten reload
+        if (window.caches) {
+          caches.keys().then(function(keys){
+            return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+          }).then(function(){
+            window.location.href = location.pathname + '?nocache=' + Date.now();
+          }).catch(function(){
+            window.location.href = location.pathname + '?nocache=' + Date.now();
+          });
+        } else {
+          window.location.href = location.pathname + '?nocache=' + Date.now();
+        }
       };
       document.body.prepend(b);
     } else {
@@ -297,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.3';
+var APP_VERSION = 'v4.4';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 var Q = { TWA_MAX:42, SPD_CLOSE:5.0, SPD_REACH:6.0, SPD_FREE:6.5 };
