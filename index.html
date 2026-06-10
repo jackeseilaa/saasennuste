@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Purjehdussää v4.9</title>
+<title>Purjehdussää v5.0</title>
 <meta name="theme-color" content="#0a4272">
 <style>
 :root {
@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v4.9</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v5.0</span>
 </div>
 
 <script>
@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v4.9';
+var APP_VERSION = 'v5.0';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -1130,7 +1130,7 @@ function escXML(s) {
 }
 
 function triggerGPXDownload(gpxContent, filename) {
-  // iOS Safari: navigator.share tukee tiedostoja iOS 15+
+  // iOS: kokeile ensin navigator.share tiedostona (iOS 15+)
   if (navigator.canShare) {
     var file = new File([gpxContent], filename, { type: 'application/gpx+xml' });
     if (navigator.canShare({ files: [file] })) {
@@ -1139,7 +1139,7 @@ function triggerGPXDownload(gpxContent, filename) {
       return;
     }
   }
-  // Fallback: blob download (toimii desktopilla ja Android)
+  // Desktop: blob download
   try {
     var blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
     var url = URL.createObjectURL(blob);
@@ -1148,35 +1148,53 @@ function triggerGPXDownload(gpxContent, filename) {
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  } catch(e) {
-    showGPXModal(gpxContent, filename);
-  }
+    return;
+  } catch(e) {}
+  showGPXModal(gpxContent, filename);
 }
 
 function showGPXModal(gpxContent, filename) {
-  // Näytä GPX teksti modaalissa — kopioi leikepöydälle tai jaa
+  window._gpxExportContent = gpxContent;
+  window._gpxExportFilename = filename;
+
+  // iSailor tukee isailorHD://importgpx?data=base64 -schemea
+  var b64 = btoa(unescape(encodeURIComponent(gpxContent)));
+  var isailorUrl = 'isailorHD://importgpx?filename=' + encodeURIComponent(filename) + '&data=' + b64;
+
+  // data: URI — Safari avaa tämän "Jaa"-dialogin kautta
+  var dataUri = 'data:application/gpx+xml;charset=utf-8,' + encodeURIComponent(gpxContent);
+
   var html =
     '<div style="padding:4px 0 10px">'
-    + '<div style="font-size:13px;color:var(--muted);margin-bottom:12px">'
-      + 'Kopioi GPX-sisältö leikepöydälle ja liitä iSailoriin tai tallenna tiedostona.'
-    + '</div>'
-    + '<div style="display:flex;gap:8px;margin-bottom:12px">'
+    + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">'
+
+      // Nappi 1: iSailor suoraan
+      + '<a href="' + isailorUrl + '" ontouchstart="" '
+        + 'style="display:block;background:#0a4272;color:#fff;border-radius:8px;padding:12px 14px;font-size:14px;font-weight:700;text-align:center;text-decoration:none">'
+        + '\u26f5 Avaa iSailorissa</a>'
+
+      // Nappi 2: data URI (Safari voi avata "Jaa"-dialogilla)
+      + '<a href="' + dataUri + '" download="' + filename + '" ontouchstart="" '
+        + 'style="display:block;background:#1a5c9a;color:#fff;border-radius:8px;padding:12px 14px;font-size:14px;font-weight:700;text-align:center;text-decoration:none">'
+        + '\uD83D\uDCBE Tallenna tiedostona</a>'
+
+      // Nappi 3: kopioi
       + '<button ontouchstart="" onclick="copyGPXToClipboard()" '
-        + 'style="flex:1;background:#0a4272;color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer">'
+        + 'style="background:#1a7a4a;color:#fff;border:none;border-radius:8px;padding:12px 14px;font-size:14px;font-weight:700;cursor:pointer">'
         + '\uD83D\uDCCB Kopioi leikepöydälle</button>'
     + '</div>'
-    + '<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">GPX-sisältö (' + filename + '):</div>'
-    + '<textarea id="gpx-export-text" readonly '
-      + 'style="width:100%;height:180px;font-family:monospace;font-size:10px;padding:8px;border:1px solid var(--border);border-radius:6px;resize:none;background:#f8f9fa;color:#333">'
-      + gpxContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    + '</textarea>'
-    + '<div style="font-size:11px;color:var(--muted);margin-top:8px">'
-      + '<strong>iSailoriin:</strong> Kopioi → iSailor → Reittipisteet → Tuo → Liitä'
+
+    + '<div style="font-size:11px;color:var(--muted);background:#f0f4f8;border-radius:8px;padding:10px;margin-bottom:10px">'
+      + '<strong>iSailor-ohje:</strong> Napauta "Avaa iSailorissa" — jos ei toimi, '
+      + 'tallenna tiedostona → iSailor → Reitit → Tuo → valitse tiedosto iCloudista.'
     + '</div>'
+
+    + '<textarea id="gpx-export-text" readonly '
+      + 'style="width:100%;height:120px;font-family:monospace;font-size:9px;padding:8px;border:1px solid var(--border);border-radius:6px;resize:none;background:#f8f9fa">'
+      + escXML(gpxContent)
+    + '</textarea>'
     + '</div>';
 
-  // Tallenna GPX globaalisti kopiointia varten
-  window._gpxExportContent = gpxContent;
   openModal('\uD83D\uDCE5 ' + filename, html);
 }
 
@@ -1184,21 +1202,15 @@ window.copyGPXToClipboard = function() {
   var content = window._gpxExportContent || '';
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(content).then(function() {
-      var btn = document.querySelector('#modal-body button');
-      if (btn) { btn.textContent = '\u2713 Kopioitu!'; btn.style.background = '#1a7a4a'; }
-    }).catch(function() { fallbackCopy(content); });
+      var btns = document.querySelectorAll('#modal-body button');
+      btns.forEach(function(b){ if (b.textContent.indexOf('Kopioi') > -1) { b.textContent = '\u2713 Kopioitu!'; b.style.background = '#1a7a4a'; } });
+    }).catch(function(){ fallbackCopy(content); });
   } else { fallbackCopy(content); }
 };
 
 function fallbackCopy(text) {
   var ta = document.getElementById('gpx-export-text');
-  if (ta) {
-    ta.select();
-    try { document.execCommand('copy');
-      var btn = document.querySelector('#modal-body button');
-      if (btn) { btn.textContent = '\u2713 Kopioitu!'; btn.style.background = '#1a7a4a'; }
-    } catch(e) { alert('Valitse teksti manuaalisesti ja kopioi.'); }
-  }
+  if (ta) { ta.select(); try { document.execCommand('copy'); } catch(e) {} }
 }
 
 function downloadRouteGPX(dir) {
