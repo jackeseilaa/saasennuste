@@ -311,7 +311,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.8';
+var APP_VERSION = 'v6.9';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -388,8 +388,8 @@ window.updatePolar = updatePolar;
 
 var WIND_IDEAL_MIN   = 5;
 var WIND_IDEAL_MAX   = 8;
-var WIND_STRONG      = 12;
-var WIND_VERY_STRONG = 16;
+var WIND_STRONG      = 10;   // 2. reivi 10 m/s
+var WIND_VERY_STRONG = 13;
 var WIND_MAX_SHOW    = 25;
 
 var lat = 60.1469, lon = 24.9877, curModel = 'icon', locName = 'Suomenlinna';
@@ -420,7 +420,9 @@ function dirArrow(deg, size) {
 }
 
 // Purjeluindeksi — Absolut 37 / 11m, täyspurjeisto n. 75m²
-// 1-4 m/s: tyyni/liian heikko | 5-9: optimum | 8-11: 1 reivi | 10-13: 2 reiviä | 13+: 3 reiviä
+// Reivipisteet Absolut 37 avomeri:
+// <5: tyyni | 5-7: paras | 8-9: erinomainen | 10: 1.reivi | 10-12: 2.reivi | 13-15: 3.reivi | 16+: myrsky
+// Käyttäjän pyyntö: 2. reivi jo 10 m/s
 function sailCalc(ws, gust) {
   ws = ws || 0;
   var s, lbl, col, bg, desc, reef;
@@ -435,25 +437,30 @@ function sailCalc(ws, gust) {
     desc='Optimituuli Absolut 37:lle — täyspurjeisto, nopea ja tasapainoinen.';
   } else if (ws <= 9) {
     s=85; lbl='Erinomainen';  col='#1a5c9a'; bg='#e2ecf8'; reef='Täydet purjeet';
-    desc='Erinomainen — voi harkita 1. reiviä puuskaissa.';
-  } else if (ws <= 11) {
-    s=70; lbl='Hyvä / 1 reivi'; col='#1a7a4a'; bg='#e6f4ec'; reef='1. reivi';
-    desc='Hyvä keli, 1. reivi suositeltava. Nopea ja hallittu.';
-  } else if (ws <= 13) {
+    desc='Erinomainen — 1. reivi valmiina jos puuskat nousevat.';
+  } else if (ws <= 10) {
+    s=75; lbl='Hyvä / 1 reivi'; col='#1a7a4a'; bg='#e6f4ec'; reef='1. reivi';
+    desc='1. reivi isoon. Tasapainoinen ja nopea avomerellä.';
+  } else if (ws <= 12) {
     s=55; lbl='2 reiviä';    col='#c45c00'; bg='#fdf0e4'; reef='2. reivi';
-    desc='Kova tuuli. 2. reivi isoon, 3. fokki tai storm jib.';
-  } else if (ws <= 16) {
+    desc='2. reivi isoon avomerellä 10+ m/s. Pienempi fokki tai 2. fokkireivi.';
+  } else if (ws <= 15) {
     s=35; lbl='3 reiviä';    col='#b85000'; bg='#fde8dc'; reef='3. reivi';
-    desc='Erittäin kova. 3. reivi + pienin fokki tai tri. Vaativa meriolo.';
+    desc='3. reivi + pienin fokki tai storm jib. Vaativa meriolo.';
   } else {
     s=10; lbl='Myrsky ⚡';   col='#b82222'; bg='#fdf0f0'; reef='Ei purjehdi';
-    desc='Yli 16 m/s — myrskyvoimainen. Ei suositella avovedellä.';
+    desc='Yli 15 m/s — myrskyvoimainen. Ei suositella avovedellä.';
   }
-  // Puuskalisä
-  if (gust && gust - ws >= 5) {
-    s = Math.max(s - 15, 5);
+  // Puuskalisä — puuskat voivat pakottaa aikaisempaan reiviin
+  if (gust && gust >= 10 && reef === 'Täydet purjeet') {
+    reef = '1. reivi (puuskat)';
+    desc += ' Puuskat ' + Math.round(gust) + ' m/s — ota 1. reivi valmiiksi.';
+    s = Math.max(s - 10, 5);
     lbl += ' ⚡';
-    desc += ' Puuskat ' + gust + ' m/s — epävakaa.';
+  } else if (gust && gust - ws >= 4) {
+    s = Math.max(s - 10, 5);
+    lbl += ' ⚡';
+    desc += ' Puuskat ' + Math.round(gust) + ' m/s — epävakaa.';
   }
   return { s:s, lbl:lbl, col:col, bg:bg, desc:desc, reef:reef||'' };
 }
@@ -726,9 +733,9 @@ function bearingDeg(la1, lo1, la2, lo2) {
 
 // Route waypoints (in order HKI→TLN)
 var ROUTE_WP = [
-  { name:'Strömsinlahti',        lat:60.1583, lon:25.0750 },
-  { name:'Villinki (S)',         lat:60.1452, lon:25.1036 },
-  { name:'Isosaari (E)',         lat:60.0950, lon:25.0745 },
+  { name:'Strömsinlahti',        lat:60.1583, lon:25.0750, coastal:true },
+  { name:'Villinki (S)',         lat:60.1452, lon:25.1036, coastal:true },
+  { name:'Isosaari (E)',         lat:60.0950, lon:25.0745, coastal:true },
   { name:'Helsingin majakka',    lat:59.9362, lon:24.9263 },
   { name:'Suomenlahti keski',    lat:59.7500, lon:24.8500 },
   { name:'Tallinnan matala (P)', lat:59.5917, lon:24.7167 },
@@ -828,6 +835,10 @@ async function showRouteView(btn) {
       var mdl = MODELS[mi];
       step('Haetaan '+mdl.label+' ('+ROUTE_WP.length+' pistettä)...', null);
       var mdlFetches = ROUTE_WP.map(function(wp, wi) {
+        // Saaristo-WP:t (coastal): MetNO ei kata hyvin, käytä vain ICON+GFS
+        if (wp.coastal && mdl.key === 'metno') {
+          return Promise.resolve({ key: mdl.key, ok: false, reason: 'coastal-skip' });
+        }
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
           + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
