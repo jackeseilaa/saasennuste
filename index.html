@@ -311,7 +311,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.7';
+var APP_VERSION = 'v6.8';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -773,13 +773,7 @@ function totalDist(segs) {
 // ── ROUTE VIEW — kilpapurjehtija-tason ensemble ───────────
 // 6 mallia: MetNO Nordic + DMI HARMONIE + ICON Seamless + ECMWF IFS HRES + GFS Seamless + UKMO Seamless
 // Havaintoasemat: FMI Harmaja (100539), Naissaari/Pakri EMHI via FMI
-var ROUTE_WP = [
-  { name:'Harmaja',            lat:60.1054, lon:24.9757, fmisid:'100539' },
-  { name:'Porkkala',           lat:59.9841, lon:24.3979, fmisid:null },
-  { name:'Suomenlahti keski',  lat:59.7500, lon:24.6500, fmisid:null },
-  { name:'Naissaari',          lat:59.5660, lon:24.5220, fmisid:'101011' },
-  { name:'Tallinna / Pirita',  lat:59.4627, lon:24.8328, fmisid:null }
-];
+// ROUTE_WP määritelty ylempänä (rivi ~728)
 
 // Estonian wx observation (EMHI via open-meteo current_weather endpoint)
 async function fetchEstonianObs(lat, lon) {
