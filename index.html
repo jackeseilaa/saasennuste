@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.4';
+var APP_VERSION = 'v5.5';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -759,10 +759,14 @@ async function showRouteView(btn) {
     // Rakenna ensemble-data: mediaani 6 mallista (painotettu resoluution mukaan)
     // Paino: MetNO=3, DMI=3, ICON=2, ECMWF=2, GFS=1, UKMO=2
     var MODEL_WEIGHTS = { metno:3, dmi:3, icon:2, ecmwf:2, gfs:1, ukmo:2 };
+    // Avomeri-puuskakerroin per malli (käytetään kun malli ei anna windgusts_10m)
+    // Suomenlahti: avomeri ilman pinnankarheutta, tyypillinen gust/mean ~1.35-1.45
+    var MODEL_GUST_FACTOR = { metno:1.40, dmi:1.35, icon:1.30, ecmwf:1.35, gfs:1.35, ukmo:1.35 };
+
     function ensembleWx(wi, dt) {
       var wds = [], wss = [], gusts = [], temps = [], wcs = [];
       var wWeights = [];
-      var perModel = {};
+      var perModel = {}, perModelGust = {}, perModelHasRealGust = {};
       MODELS.forEach(function(mdl) {
         var d = routeCache[wi][mdl.key];
         if (!d||!d.hourly) return;
@@ -778,19 +782,29 @@ async function showRouteView(btn) {
           if (H.time[i]===target) {
             var ws = H.windspeed_10m[i];
             var wd = H.winddirection_10m[i];
-            var gust = H.windgusts_10m ? H.windgusts_10m[i] : ws*1.3;
-            var temp = H.temperature_2m[i];
-            var wc = H.weathercode[i];
-            if (ws == null || wd == null) break;
+            if (ws == null || wd == null || isNaN(ws) || isNaN(wd)) break;
+            // Puuska: käytä mallin arvoa jos saatavilla ja järkevä (> ws),
+            // muuten laske tilastollinen arvio avomeri-kertoimella
+            var rawGust = (H.windgusts_10m && H.windgusts_10m[i] != null)
+                          ? H.windgusts_10m[i] : null;
+            var hasRealGust = (rawGust != null && !isNaN(rawGust) && rawGust >= ws);
+            var gust = hasRealGust
+                       ? rawGust
+                       : ws * (MODEL_GUST_FACTOR[mdl.key] || 1.35);
+            var temp = (H.temperature_2m && H.temperature_2m[i] != null) ? H.temperature_2m[i] : 12;
+            var wc   = (H.weathercode   && H.weathercode[i]   != null) ? H.weathercode[i]   : 0;
             var w = MODEL_WEIGHTS[mdl.key] || 1;
             wss.push(ws); wds.push(wd); gusts.push(gust);
             temps.push(temp); wcs.push(wc); wWeights.push(w);
             perModel[mdl.key] = ws;
+            perModelGust[mdl.key] = gust;
+            perModelHasRealGust[mdl.key] = hasRealGust;
             break;
           }
         }
       });
       if (!wss.length) return null;
+
       // Tuulensuunta: painotettu vektorikeskiarvo
       var sinSum=0, cosSum=0, wTot=0;
       wds.forEach(function(d,i){
@@ -799,27 +813,42 @@ async function showRouteView(btn) {
         wTot+=wWeights[i];
       });
       var wdMean = (Math.atan2(sinSum/wTot, cosSum/wTot)*180/Math.PI+360)%360;
-      // Painotettu keskiarvo tuulelle
+
+      // Tuulennopeus: painotettu keskiarvo
       var wsWsum=0;
       wss.forEach(function(v,i){ wsWsum+=v*wWeights[i]; });
       var wsMean = wsWsum / wTot;
       var wsMax  = Math.max.apply(null, wss);
       var wsMin  = Math.min.apply(null, wss);
       var spread = wsMax - wsMin;
-      var gustSum=0, tempSum=0;
-      gusts.forEach(function(v,i){ gustSum+=v*wWeights[i]; });
+
+      // Puuska: painotettu keskiarvo — kaikilla malleilla on nyt arvo (oikea tai kerroin)
+      // Lisäksi otetaan huomioon mallien maksimipuuska (konservatiivinen lähestymistapa):
+      // gustEnsemble = 0.7 * painotettu_keskiarvo + 0.3 * mallien_maksimi
+      var gustWsum=0;
+      gusts.forEach(function(v,i){ gustWsum+=v*wWeights[i]; });
+      var gustWeightedMean = gustWsum / wTot;
+      var gustMax = Math.max.apply(null, gusts);
+      // Konservatiivinen yhdistelmä: kyllä puuskat sattuvat pahimmillaan
+      var gustMean = 0.7 * gustWeightedMean + 0.3 * gustMax;
+      // Varmistus: puuska >= keskinopeus aina
+      gustMean = Math.max(gustMean, wsMean);
+
+      var tempSum=0;
       temps.forEach(function(v,i){ tempSum+=v*wWeights[i]; });
-      var gustMean = Math.max(gustSum / wTot, wsMean); // puuska ei voi olla pienempi kuin tuuli
       var tempMean = tempSum / wTot;
+
       // Pahin sää
       var wc = wcs.reduce(function(a,b){ return b>a?b:a; }, 0);
-      var result = {
+
+      return {
         ws:wsMean, wd:wdMean, gust:gustMean, temp:tempMean, wc:wc,
         spread:spread, wsMin:wsMin, wsMax:wsMax,
         models: wss.length,
-        perModel: perModel
+        perModel: perModel,
+        perModelGust: perModelGust,
+        perModelHasRealGust: perModelHasRealGust
       };
-      return result;
     }
 
     // Hae lähimmän WP:n ensemble-data
@@ -1297,25 +1326,40 @@ window.showRouteRowDetail = function(key) {
       { key:'ukmo',  label:'UKMO',  sub:'2-10km' }
     ];
     var mdlCols = modelDefs.filter(function(m){ return wx.perModel[m.key] != null; });
-    var colW = Math.floor(100/mdlCols.length);
     var mdlGrid = mdlCols.map(function(m){
-      var v = wx.perModel[m.key];
+      var v    = wx.perModel[m.key];
+      var gv   = wx.perModelGust && wx.perModelGust[m.key] != null ? wx.perModelGust[m.key] : null;
+      var real = wx.perModelHasRealGust && wx.perModelHasRealGust[m.key];
       var diff = v - wx.ws;
       var diffCol = Math.abs(diff)<0.5?'#1a7a4a':Math.abs(diff)<1.5?'#b87c1a':'#b82222';
       var diffStr = (diff>=0?'+':'')+diff.toFixed(1);
-      return '<div style="text-align:center;padding:4px 2px">'
+      var gustStr = gv != null
+        ? (real
+            ? '<span style="color:#0a4272;font-weight:700">↑'+gv.toFixed(1)+'</span>'
+            : '<span style="color:#8a6a20" title="arvioitu kertoimella">~'+gv.toFixed(1)+'</span>')
+        : '<span style="color:#ccc">—</span>';
+      return '<div style="text-align:center;padding:4px 2px;border-right:1px solid #e8edf2">'
         +'<div style="font-size:10px;font-weight:700;color:#0a4272">'+m.label+'</div>'
         +'<div style="font-size:9px;color:var(--muted)">'+m.sub+'</div>'
-        +'<div style="font-size:14px;font-weight:700;margin:2px 0">'+v.toFixed(1)+'</div>'
-        +'<div style="font-size:10px;color:'+diffCol+'">'+diffStr+'</div>'
+        +'<div style="font-size:13px;font-weight:700;margin:1px 0">'+v.toFixed(1)+'</div>'
+        +'<div style="font-size:9px;color:var(--muted)">tuuli</div>'
+        +'<div style="font-size:12px;margin:1px 0">'+gustStr+'</div>'
+        +'<div style="font-size:9px;color:var(--muted)">puuska</div>'
+        +'<div style="font-size:9px;color:'+diffCol+'">'+diffStr+'</div>'
         +'</div>';
     }).join('');
     spreadHtml = '<div style="background:#f0f4f8;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">'
-      +'<div style="font-weight:700;color:#0a4272;margin-bottom:6px">Mallivertailu ('+wx.models+'/6) · painotettu keskiarvo '+wx.ws.toFixed(1)+' m/s</div>'
-      +'<div style="display:grid;grid-template-columns:repeat('+mdlCols.length+',1fr);gap:4px;background:#fff;border-radius:6px;padding:6px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+        +'<div style="font-weight:700;color:#0a4272">Mallivertailu ('+wx.models+'/6)</div>'
+        +'<div style="font-size:11px;color:var(--muted)">tuuli '+wx.ws.toFixed(1)+' · puuska '+wx.gust.toFixed(1)+' m/s</div>'
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat('+mdlCols.length+',1fr);background:#fff;border-radius:6px;padding:4px;border:1px solid #dde2ea">'
       +mdlGrid
       +'</div>'
-      +'<div style="margin-top:6px;color:var(--muted)">Vaihteluväli: '+wx.wsMin.toFixed(1)+'–'+wx.wsMax.toFixed(1)+' m/s · hajonta ±'+wx.spread.toFixed(1)+' m/s</div>'
+      +'<div style="margin-top:6px;color:var(--muted);font-size:11px">'
+        +'Tuuliväli: '+wx.wsMin.toFixed(1)+'–'+wx.wsMax.toFixed(1)+' m/s · hajonta ±'+wx.spread.toFixed(1)
+        +' · <span style="color:#8a6a20">~ = puuska arvioitu kertoimella</span>'
+      +'</div>'
     +'</div>';
   }
   var html = navHtml + spreadHtml
