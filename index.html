@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.3';
+var APP_VERSION = 'v5.4';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -809,7 +809,7 @@ async function showRouteView(btn) {
       var gustSum=0, tempSum=0;
       gusts.forEach(function(v,i){ gustSum+=v*wWeights[i]; });
       temps.forEach(function(v,i){ tempSum+=v*wWeights[i]; });
-      var gustMean = gustSum / wTot;
+      var gustMean = Math.max(gustSum / wTot, wsMean); // puuska ei voi olla pienempi kuin tuuli
       var tempMean = tempSum / wTot;
       // Pahin sää
       var wc = wcs.reduce(function(a,b){ return b>a?b:a; }, 0);
@@ -930,7 +930,7 @@ async function showRouteView(btn) {
           +'<span style="pointer-events:none;min-width:22px">'+(WI[row.wx.wc]||'\ud83c\udf21')+'</span>'
           +'<span style="pointer-events:none;min-width:34px;font-size:13px">'+Math.round(row.wx.temp)+'\u00b0</span>'
           +'<span style="pointer-events:none;min-width:54px;font-size:13px;font-weight:600">'+ws2+' m/s</span>'
-          +'<span style="pointer-events:none;min-width:44px;font-size:11px;color:var(--muted)">\u2191'+gust2+'</span>'
+          +'<span style="pointer-events:none;min-width:44px;font-size:11px;color:var(--muted)">\u2191'+gust2+' m/s</span>'
           +'<span style="pointer-events:none;min-width:64px;font-size:12px;display:inline-flex;align-items:center;gap:2px;color:var(--muted)">'+dirArrowS(row.wx.wd)+' '+Math.round(row.wx.wd)+'\u00b0 '+dirCard(row.wx.wd)+'</span>'
           +'<span style="pointer-events:none;min-width:40px;font-size:11px;font-weight:600;color:'+spCol+'">\u00b1'+spTxt+'</span>'
           +'<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">\u25b6 '+row.name+' <span style="color:#c0c8d4">\u00b7 '+row.distFromStart.toFixed(0)+' M</span></span>'
