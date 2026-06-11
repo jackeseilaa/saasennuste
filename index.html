@@ -231,16 +231,15 @@ function checkVersionManual() {
       b.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:9999';
       b.textContent = '\u2B06 Versio ' + remoteVer + ' saatavilla — napauta ladataksesi';
       b.onclick = function(){
+        // Tyhjennä SW-cache + pakota uusi lataus timestampilla
+        var reloadUrl = location.pathname + '?v=' + remoteVer + '&t=' + Date.now();
         if (window.caches) {
           caches.keys().then(function(keys){
             return Promise.all(keys.map(function(k){ return caches.delete(k); }));
-          }).then(function(){
-            window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
-          }).catch(function(){
-            window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
-          });
+          }).then(function(){ window.location.href = reloadUrl; })
+            .catch(function(){ window.location.href = reloadUrl; });
         } else {
-          window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
+          window.location.href = reloadUrl;
         }
       };
       document.body.prepend(b);
@@ -312,7 +311,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.5';
+var APP_VERSION = 'v6.6';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -404,12 +403,13 @@ var DNS = ['Su','Ma','Ti','Ke','To','Pe','La'];
 
 // Reittivaihepisteet Helsinki–Tallinna (koordinaatit)
 var ROUTE_WAYPOINTS = [
-  { name:'Helsinki / Suomenlinna', lat:60.1469, lon:24.9877, port:'hki' },
-  { name:'Harmaja (FMI-asema)',    lat:60.1054, lon:24.9757, port:'hki' },
-  { name:'Helsingin majakka',      lat:59.9362, lon:24.9263, port:'hki' },
-  { name:'Suomenlahti keski',      lat:59.7500, lon:24.8500, port:'mid' },
-  { name:'Tallinnan matala (P)',   lat:59.5917, lon:24.7167, port:'tln' },
-  { name:'Noblessner',             lat:59.4550, lon:24.7353, port:'tln' }
+  { name:'Strömsinlahti / Roihuvuoren VK', lat:60.1583, lon:25.0750, port:'hki' },
+  { name:'Villinki (W)',         lat:60.1300, lon:25.0250, port:'hki' },
+  { name:'Isosaari (E)',         lat:60.0917, lon:25.0800, port:'hki' },
+  { name:'Helsingin majakka',    lat:59.9362, lon:24.9263, port:'hki' },
+  { name:'Suomenlahti keski',    lat:59.7500, lon:24.8500, port:'mid' },
+  { name:'Tallinnan matala (P)', lat:59.5917, lon:24.7167, port:'tln' },
+  { name:'Noblessner',           lat:59.4550, lon:24.7353, port:'tln' }
 ];
 
 function dirCard(d) { return ['P','KP','K','KE','E','KA','L','LP'][Math.round(d/45)%8]; }
@@ -726,7 +726,9 @@ function bearingDeg(la1, lo1, la2, lo2) {
 
 // Route waypoints (in order HKI→TLN)
 var ROUTE_WP = [
-  { name:'Harmaja',              lat:60.1054, lon:24.9757 },
+  { name:'Strömsinlahti',        lat:60.1583, lon:25.0750 },
+  { name:'Villinki (W)',         lat:60.1300, lon:25.0250 },
+  { name:'Isosaari (E)',         lat:60.0917, lon:25.0800 },
   { name:'Helsingin majakka',    lat:59.9362, lon:24.9263 },
   { name:'Suomenlahti keski',    lat:59.7500, lon:24.8500 },
   { name:'Tallinnan matala (P)', lat:59.5917, lon:24.7167 },
