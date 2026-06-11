@@ -232,15 +232,18 @@ function checkVersionManual() {
       b.textContent = '\u2B06 Versio ' + remoteVer + ' saatavilla — napauta ladataksesi';
       b.onclick = function(){
         // Tyhjennä SW-cache + pakota uusi lataus timestampilla
-        var reloadUrl = location.pathname + '?v=' + remoteVer + '&t=' + Date.now();
-        if (window.caches) {
-          caches.keys().then(function(keys){
-            return Promise.all(keys.map(function(k){ return caches.delete(k); }));
-          }).then(function(){ window.location.href = reloadUrl; })
-            .catch(function(){ window.location.href = reloadUrl; });
-        } else {
-          window.location.href = reloadUrl;
-        }
+        var reloadUrl = location.pathname + '?nocache=' + Date.now();
+        // Tyhjennä kaikki cachez
+        try {
+          if (window.caches) {
+            caches.keys().then(function(keys){
+              Promise.all(keys.map(function(k){ return caches.delete(k); }))
+                .finally(function(){ window.location.replace(reloadUrl); });
+            }).catch(function(){ window.location.replace(reloadUrl); });
+          } else {
+            window.location.replace(reloadUrl);
+          }
+        } catch(e) { window.location.replace(reloadUrl); }
       };
       document.body.prepend(b);
     } else {
@@ -311,7 +314,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v7.4';
+var APP_VERSION = 'v7.5';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -805,29 +808,33 @@ async function showRouteView(btn) {
       } catch(e) { return false; }
     }
 
+    // Hae mallit peräkkäin — closure-safe, ei for-loop bugia
     for (var mi = 0; mi < MODELS.length; mi++) {
-      var mdl = MODELS[mi];
-      var okCount = 0, failedWPs = [];
-      step('Haetaan '+mdl.label+'...', null);
-      // Ensin kaikki rinnakkain
-      var firstPass = await Promise.all(ROUTE_WP.map(function(wp, wi) {
-        return fetchOneWP(mdl, wp, wi, 20000).then(function(ok) {
-          return { wi:wi, wp:wp, ok:ok };
+      await (async function(mdl) {
+        var okCount = 0, failedWPs = [];
+        step('Haetaan '+mdl.label+'...', null);
+        var firstPass = await Promise.all(ROUTE_WP.map(function(wp, wi) {
+          return fetchOneWP(mdl, wp, wi, 15000).then(function(ok) {
+            return { wi:wi, wp:wp, ok:ok };
+          });
+        }));
+        firstPass.forEach(function(r){
+          if (r.ok) okCount++;
+          else if (!r.wp.coastal || mdl.key !== 'metno') failedWPs.push(r);
         });
-      }));
-      firstPass.forEach(function(r){ if(r.ok) okCount++; else if(!r.wp.coastal||mdl.key!=='metno') failedWPs.push(r); });
-      // Retry epäonnistuneet 1.5s viiveellä
-      if (failedWPs.length > 0) {
-        await new Promise(function(res){ setTimeout(res, 1500); });
-        for (var fi = 0; fi < failedWPs.length; fi++) {
-          var fw = failedWPs[fi];
-          var retryOk = await fetchOneWP(mdl, fw.wp, fw.wi, 25000);
-          if (retryOk) okCount++;
+        // Retry kerran epäonnistuneille
+        if (failedWPs.length > 0) {
+          await new Promise(function(res){ setTimeout(res, 1000); });
+          for (var fi = 0; fi < failedWPs.length; fi++) {
+            var retryOk = await fetchOneWP(mdl, failedWPs[fi].wp, failedWPs[fi].wi, 15000);
+            if (retryOk) okCount++;
+          }
         }
-      }
-      var skipCount = mdl.key==='metno' ? ROUTE_WP.filter(function(w){return w.coastal;}).length : 0;
-      var denominator = ROUTE_WP.length - skipCount;
-      step(mdl.label+': '+okCount+'/'+denominator+' pistettä OK'+(skipCount?' ('+skipCount+' saaristo-skip)':''), okCount > 0);
+        var skipCount = mdl.key==='metno'
+          ? ROUTE_WP.filter(function(w){ return w.coastal; }).length : 0;
+        var denom = ROUTE_WP.length - skipCount;
+        step(mdl.label+': '+okCount+'/'+denom+' OK'+(skipCount?' ('+skipCount+' saaristo-skip)':''), okCount > 0);
+      })(MODELS[mi]);
     }
     step(totalFetched+'/'+totalExpected+' hakua onnistui', totalFetched > 0);
 
