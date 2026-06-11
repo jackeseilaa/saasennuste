@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.0';
+var APP_VERSION = 'v5.1';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -1317,27 +1317,32 @@ function parseGPX(xmlText) {
 // Muodosta datetime-local string paikallisessa ajassa (HH:00 pyöristys ylöspäin)
 function defaultStartDateStr() {
   var now = new Date();
-  // Pyöristä seuraavaan täysituntiin
-  var next = new Date(now.getTime());
-  if (next.getMinutes() > 0 || next.getSeconds() > 0) {
-    next.setMinutes(0); next.setSeconds(0); next.setMilliseconds(0);
-    next = new Date(next.getTime() + 3600000);
+  // Pyöristä seuraavaan täysituntiin Helsinki-aikavyöhykkeellä
+  if (now.getMinutes() > 0 || now.getSeconds() > 0) {
+    now = new Date(now.getTime() + 3600000);
   }
-  var Y = next.getFullYear();
-  var M = String(next.getMonth()+1).padStart(2,'0');
-  var D = String(next.getDate()).padStart(2,'0');
-  var H = String(next.getHours()).padStart(2,'0');
-  return Y + '-' + M + '-' + D + 'T' + H + ':00';
+  now.setMinutes(0); now.setSeconds(0); now.setMilliseconds(0);
+  // Muodosta merkkijono Helsinki-aikavyöhykkeessä
+  var fmt = new Intl.DateTimeFormat('fi-FI', {
+    timeZone: 'Europe/Helsinki',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(now);
+  var p = {};
+  fmt.forEach(function(x){ p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day + 'T' + p.hour + ':00';
 }
 
 // Muodosta ennusteen maksimilähtöaika (nyt + 15 vrk, jätetään 1 vrk puskuri)
 function maxForecastDateStr() {
-  var d = new Date();
-  d.setDate(d.getDate() + 15);
-  var Y = d.getFullYear();
-  var M = String(d.getMonth()+1).padStart(2,'0');
-  var D = String(d.getDate()).padStart(2,'0');
-  return Y + '-' + M + '-' + D + 'T23:00';
+  var d = new Date(new Date().getTime() + 15 * 86400000);
+  var fmtParts = new Intl.DateTimeFormat('fi-FI', {
+    timeZone: 'Europe/Helsinki',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(d);
+  var p = {};
+  fmtParts.forEach(function(x){ p[x.type] = x.value; });
+  return p.year + '-' + p.month + '-' + p.day + 'T23:00';
 }
 
 function openGPXPanel() {
