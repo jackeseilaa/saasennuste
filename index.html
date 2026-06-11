@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.0';
+var APP_VERSION = 'v6.1';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -722,13 +722,15 @@ async function showRouteView(btn) {
     step('Geometria OK — '+totalNM.toFixed(1)+' M, '+segsAB.length+' jalkaa', true);
 
     // Hae 3 mallia jokaiselle reittipisteelle
+    // maxDays = open-meteo:n tukema maksimi per malli
+    // dmi_seamless = DMI HARMONIE + ECMWF jatkona → kattaa koko Itämeren/Suomenlahden
     var MODELS = [
-      { key:'metno',  model:'metno_nordic',              label:'MetNO',  shortLabel:'MetNO 1km' },
-      { key:'dmi',    model:'dmi_harmonie_arome_europe',  label:'DMI',    shortLabel:'DMI 2km' },
-      { key:'icon',   model:'icon_seamless',              label:'ICON',   shortLabel:'ICON 2-11km' },
-      { key:'ecmwf',  model:'ecmwf_ifs',                  label:'ECMWF',  shortLabel:'ECMWF 9km' },
-      { key:'gfs',    model:'gfs_seamless',               label:'GFS',    shortLabel:'GFS 3-25km' },
-      { key:'ukmo',   model:'ukmo_seamless',              label:'UKMO',   shortLabel:'UKMO 2-10km' }
+      { key:'metno',  model:'metno_nordic',    label:'MetNO', shortLabel:'MetNO 1km',   maxDays:7  },
+      { key:'dmi',    model:'dmi_seamless',    label:'DMI',   shortLabel:'DMI saumaton', maxDays:7  },
+      { key:'icon',   model:'icon_seamless',   label:'ICON',  shortLabel:'ICON 2-11km', maxDays:16 },
+      { key:'ecmwf',  model:'ecmwf_ifs',       label:'ECMWF', shortLabel:'ECMWF 9km',  maxDays:15 },
+      { key:'gfs',    model:'gfs_seamless',    label:'GFS',   shortLabel:'GFS 3-25km', maxDays:16 },
+      { key:'ukmo',   model:'ukmo_seamless',   label:'UKMO',  shortLabel:'UKMO 2-10km',maxDays:7  }
     ];
     step('Haetaan 6 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
 
@@ -746,7 +748,8 @@ async function showRouteView(btn) {
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
           + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-          + '&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model+'&forecast_days=16';
+          + '&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model
+          + '&forecast_days='+(mdl.maxDays||7);
         var ctrl = new AbortController();
         setTimeout(function(){ ctrl.abort(); }, 20000);
         return fetch(url, { signal: ctrl.signal })
@@ -1067,7 +1070,8 @@ async function showRouteView(btn) {
       if (!obs) return '<div style="background:#f8f9fa;border:1px solid #dde2ea;border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted)">\u26a0\ufe0f '+label+' \u2014 ei saatavilla</div>';
       var ws = isEstonian ? obs.windspeed : (obs.windspeed||0);
       var wd = isEstonian ? obs.winddirection : (obs.winddirection||0);
-      var gust = isEstonian ? (obs.windspeed*1.35) : (obs.windgust||obs.windspeed*1.35);
+      var rawGust = isEstonian ? null : obs.windgust;
+      var gust = (rawGust != null && !isNaN(rawGust) && rawGust > 0) ? rawGust : ws * 1.35;
       gust = Math.max(gust, ws);
       var si = sailCalc(Math.round(ws), Math.round(gust));
       var srcBadge = (!isEstonian && obs._source === 'OM')
