@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.3';
+var APP_VERSION = 'v6.4';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -493,6 +493,99 @@ function buildFMIObsUrl(stationFmisid) {
     + '&starttime=' + fmt(start)
     + '&endtime=' + fmt(now)
     + '&maxlocations=1';
+}
+
+// ── FMI WAM Itämeri-aaltoennuste per koordinaatti ──────────────────────────
+// storedquery: fmi::forecast::wam::point::timevaluepair
+// Palauttaa SignificantWaveHeight, MeanWavePeriod, MeanWaveDirection
+// Ennustehorisontti ~60h, päivittyy 6h välein
+function buildFMIWaveUrl(lat, lon, hoursAhead) {
+  var now = new Date();
+  var end = new Date(now.getTime() + (hoursAhead||60) * 3600000);
+  function fmt(d) { return d.toISOString().replace('.000Z','Z'); }
+  return 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+    + '&storedquery_id=fmi::forecast::wam::point::timevaluepair'
+    + '&latlon='+lat.toFixed(4)+','+lon.toFixed(4)
+    + '&parameters=SignificantWaveHeight,MeanWavePeriod,MeanWaveDirection'
+    + '&starttime=' + fmt(now)
+    + '&endtime=' + fmt(end)
+    + '&timestep=60';
+}
+
+// Parse FMI WAM XML → { times:[], heights:[], periods:[], directions:[] }
+function parseFMIwave(xmlText) {
+  try {
+    var parser = new DOMParser();
+    var xml = parser.parseFromString(xmlText, 'text/xml');
+    var result = { times:[], heights:[], periods:[], directions:[] };
+    var series = xml.querySelectorAll('MeasurementTimeseries');
+    series.forEach(function(ts) {
+      var id = ts.getAttribute('gml:id') || '';
+      var isHeight    = id.toLowerCase().indexOf('significantwaveheight') > -1;
+      var isPeriod    = id.toLowerCase().indexOf('meanwaveperiod') > -1;
+      var isDirection = id.toLowerCase().indexOf('meanwavedirection') > -1;
+      if (!isHeight && !isPeriod && !isDirection) return;
+      var points = ts.querySelectorAll('MeasurementTVP');
+      points.forEach(function(pt, idx) {
+        var timeEl = pt.querySelector('time');
+        var valEl  = pt.querySelector('value');
+        var val = valEl ? parseFloat(valEl.textContent) : NaN;
+        if (isHeight) {
+          if (timeEl) result.times[idx] = timeEl.textContent;
+          result.heights[idx] = isNaN(val) ? null : val;
+        } else if (isPeriod) {
+          result.periods[idx] = isNaN(val) ? null : val;
+        } else if (isDirection) {
+          result.directions[idx] = isNaN(val) ? null : val;
+        }
+      });
+    });
+    return result.times.length > 0 ? result : null;
+  } catch(e) { return null; }
+}
+
+// Hae FMI WAM ennuste yhdelle koordinaatille (timeout 10s)
+async function fetchFMIwave(lat, lon) {
+  try {
+    var ctrl = new AbortController();
+    setTimeout(function(){ ctrl.abort(); }, 10000);
+    var r = await fetch(buildFMIWaveUrl(lat, lon, 60), { signal: ctrl.signal });
+    if (!r.ok) return null;
+    var xml = await r.text();
+    return parseFMIwave(xml);
+  } catch(e) { return null; }
+}
+
+// ── Helsingin aaltopoiju fmisid=132310 ────────────────────────────────────
+// Havainnot: SignificantWaveHeight, MeanWavePeriod, MeanWaveDirection, MaximumWaveHeight
+async function fetchHelsinkiWaveBuoy() {
+  try {
+    var now = new Date();
+    var start = new Date(now.getTime() - 3 * 3600000);
+    function fmt(d) { return d.toISOString().replace('.000Z','Z'); }
+    var url = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature'
+      + '&storedquery_id=fmi::observations::wave::timevaluepair'
+      + '&fmisid=132310'
+      + '&parameters=SignificantWaveHeight,MeanWavePeriod,MeanWaveDirection,MaximumWaveHeight'
+      + '&starttime=' + fmt(start)
+      + '&endtime=' + fmt(now);
+    var ctrl = new AbortController();
+    setTimeout(function(){ ctrl.abort(); }, 10000);
+    var r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    var xml = await r.text();
+    // Käytä samaa parseria kuin WAM mutta viimeinen arvo
+    var parsed = parseFMIwave(xml);
+    if (!parsed || !parsed.heights.length) return null;
+    var last = parsed.heights.length - 1;
+    return {
+      height:    parsed.heights[last],
+      period:    parsed.periods[last],
+      direction: parsed.directions[last],
+      time:      parsed.times[last] ? new Date(parsed.times[last]) : null,
+      _source:   'buoy'
+    };
+  } catch(e) { return null; }
 }
 
 // Parse FMI WFS XML observation response
@@ -765,31 +858,39 @@ async function showRouteView(btn) {
     }
     step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' hakua onnistui', totalFetched > 0);
 
-    // Havaintodata + aaltodata rinnakkain
-    step('Haetaan havaintodata ja aaltoennuste...', null);
-    // waveCache[wpIdx] = { time:[], wave_height:[], wave_direction:[], wave_period:[], wind_wave_height:[] }
-    var waveCache = {};
-    var waveFetches = ROUTE_WP.map(function(wp, wi) {
-      var url = 'https://marine-api.open-meteo.com/v1/marine'
-        + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
-        + '&hourly=wave_height,wave_direction,wave_period,wind_wave_height'
-        + '&timezone=Europe/Helsinki&forecast_days=16';
-      var ctrl = new AbortController();
-      setTimeout(function(){ ctrl.abort(); }, 12000);
-      return fetch(url, { signal: ctrl.signal })
-        .then(function(r){ return r.json(); })
-        .then(function(d){ if (d && d.hourly && d.hourly.wave_height) waveCache[wi] = d.hourly; })
-        .catch(function(){});
-    });
-    var obsAndWaveFetches = [fetchFMIobs(), fetchEstonianObs(59.5660, 24.5220)].concat(waveFetches);
-    var obsAndWaveResults = await Promise.all(obsAndWaveFetches);
-    var fmiObs       = obsAndWaveResults[0];
-    var naissaariObs = obsAndWaveResults[1];
-    var wavePointsOk = Object.keys(waveCache).length;
-    var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari':'');
-    step('Havainnot: '+(obsStr||'ei saatavilla')+' · aalto: '+wavePointsOk+'/'+ROUTE_WP.length+' pistettä', true);
+    // Havaintodata + FMI WAM aaltoennuste + Helsingin aaltopoijuhavainto
+    step('Haetaan havainnot ja FMI WAM aaltoennuste...', null);
 
-    // Hae aaltodata annetulle hetkelle lähimmältä WP:ltä
+    // FMI WAM per WP — peräkkäin jotta ei ylikuormita FMI WFS:ää
+    // waveCache[wi] = { times:[], heights:[], periods:[], directions:[] }
+    var waveCache = {};
+    var waveBuoyObs = null;
+
+    var obsResults = await Promise.all([
+      fetchFMIobs(),
+      fetchEstonianObs(59.5660, 24.5220),
+      fetchHelsinkiWaveBuoy()
+    ]);
+    var fmiObs       = obsResults[0];
+    var naissaariObs = obsResults[1];
+    waveBuoyObs      = obsResults[2];
+
+    // FMI WAM per WP peräkkäin (FMI WFS ei tue 5 samanaikaista hyvin)
+    var waveOk = 0;
+    for (var wwi = 0; wwi < ROUTE_WP.length; wwi++) {
+      var wwp = ROUTE_WP[wwi];
+      var wdata = await fetchFMIwave(wwp.lat, wwp.lon);
+      if (wdata && wdata.times.length > 0) {
+        waveCache[wwi] = wdata;
+        waveOk++;
+      }
+    }
+
+    var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari ':'')
+               + (waveBuoyObs&&waveBuoyObs.height?'AaltoPoiju ':'');
+    step('Havainnot: '+(obsStr||'ei saatavilla')+' · FMI WAM: '+waveOk+'/'+ROUTE_WP.length+' pistettä', true);
+
+    // Hae FMI WAM aaltodata annetulle hetkelle lähimmältä WP:ltä
     function getWaveForPos(lat, lon, dt) {
       var best=-1, bd=9999;
       ROUTE_WP.forEach(function(wp,i){
@@ -798,24 +899,56 @@ async function showRouteView(btn) {
       });
       if (best<0 || !waveCache[best]) return null;
       var W = waveCache[best];
-      var fmt = new Intl.DateTimeFormat('fi-FI', {
-        timeZone:'Europe/Helsinki', year:'numeric', month:'2-digit',
-        day:'2-digit', hour:'2-digit', hour12:false
-      });
-      var parts = fmt.formatToParts(dt), pp = {};
-      parts.forEach(function(p){ pp[p.type]=p.value; });
-      var target = pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':00';
-      for (var i=0; i<W.time.length; i++) {
-        if (W.time[i]===target) {
+      // FMI aikaleima on ISO-muodossa: "2026-06-12T09:00:00Z"
+      // Vertaa Helsinki-aikaan
+      for (var i=0; i<W.times.length; i++) {
+        if (!W.times[i]) continue;
+        var t = new Date(W.times[i]);
+        // Vertaa tunnin tarkkuudella
+        if (Math.abs(t.getTime() - dt.getTime()) < 1800000) {
           return {
-            height:    W.wave_height[i],
-            direction: W.wave_direction ? W.wave_direction[i] : null,
-            period:    W.wave_period ? W.wave_period[i] : null,
-            windWave:  W.wind_wave_height ? W.wind_wave_height[i] : null
+            height:    W.heights[i],
+            direction: W.directions[i] || null,
+            period:    W.periods[i] || null,
+            windWave:  null,
+            _source:   'FMI-WAM'
           };
         }
       }
+      // Ei tarkkaa osumaa — interpoloi lähimmät
+      var closest = null, closestDiff = Infinity;
+      for (var j=0; j<W.times.length; j++) {
+        if (!W.times[j] || W.heights[j]==null) continue;
+        var diff = Math.abs(new Date(W.times[j]).getTime() - dt.getTime());
+        if (diff < closestDiff) { closestDiff=diff; closest=j; }
+      }
+      if (closest!==null && closestDiff < 7200000) {
+        return {
+          height:    W.heights[closest],
+          direction: W.directions[closest] || null,
+          period:    W.periods[closest] || null,
+          windWave:  null,
+          _source:   'FMI-WAM'
+        };
+      }
       return null;
+    }
+
+    // Aaltopoijukortti — Helsingin aaltopoiju (fmisid 132310)
+    function waveBuoyCard(obs) {
+      if (!obs || obs.height == null) return '';
+      var wh = obs.height, wp2 = obs.period, wdir = obs.direction;
+      var waveCol = wh>1.5?'#b82222':wh>1.0?'#b87c1a':wh>0.5?'#0a4272':'#1a7a4a';
+      var timeStr = obs.time ? obs.time.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div class="fmi-obs-card">'
+        +'<div class="fmi-obs-title"><span class="fmi-live"></span> 🌊 Helsingin aaltopoiju — havainto'+(timeStr?' klo '+timeStr:'')+'</div>'
+        +'<div class="fmi-obs-grid">'
+        +'<div class="fmi-obs-stat"><div class="fmi-obs-l">Merkittävä kork.</div><div class="fmi-obs-v" style="color:'+waveCol+'">'+wh.toFixed(2)+'<span class="fmi-obs-u"> m</span></div></div>'
+        +(wp2!=null?'<div class="fmi-obs-stat"><div class="fmi-obs-l">Jakso</div><div class="fmi-obs-v">'+wp2.toFixed(1)+'<span class="fmi-obs-u"> s</span></div></div>':'')
+        +(wdir!=null?'<div class="fmi-obs-stat"><div class="fmi-obs-l">Suunta</div><div class="fmi-obs-v">'+Math.round(wdir)+'°</div></div>':'')
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">FMI Itämeri-WAM · Suomenlahdelle kalibroitu malli</div>'
+        +'</div>';
     }
 
     // Rakenna ensemble-data: mediaani 6 mallista (painotettu resoluution mukaan)
@@ -1125,6 +1258,7 @@ async function showRouteView(btn) {
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
         +obsCard('FMI Harmaja \u2014 havainto nyt', fmiObs, false)
         +obsCard('Naissaari \u2014 havainto nyt', naissaariObs, true)
+        +(waveBuoyObs && waveBuoyObs.height != null ? waveBuoyCard(waveBuoyObs) : '')
       +'</div>'
       +'<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:12px">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
@@ -1163,6 +1297,7 @@ async function showRouteView(btn) {
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
         +obsCard('FMI Harmaja \u2014 havainto nyt', fmiObs, false)
         +obsCard('Naissaari \u2014 havainto nyt', naissaariObs, true)
+        +(waveBuoyObs && waveBuoyObs.height != null ? waveBuoyCard(waveBuoyObs) : '')
       +'</div>'
       +'<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:12px">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
@@ -1459,6 +1594,7 @@ window.showRouteRowDetail = function(key) {
         +(wwh!=null?'<div><div style="font-size:10px;color:var(--muted)">Tuuliaall.</div><div style="font-size:16px;font-weight:700;color:#4a6a8a">'+wwh.toFixed(1)+'<span style="font-size:11px"> m</span></div></div>':'')
       +'</div>'
       +'<div style="margin-top:6px;font-size:12px;color:'+waveCol+'">'+waveDesc+'</div>'
+      +'<div style="margin-top:2px;font-size:10px;color:var(--muted)">FMI Itämeri-WAM — Suomenlahdelle kalibroitu aaltomalli</div>'
       +(headSea?'<div style="margin-top:4px;font-size:11px;color:#b87c1a">⚠️ Vastainen aallokko hidastaa VMG:tä — aallokko tulee suunnasta '+Math.round(wdir)+'°, kurssi '+Math.round(row.legBrg)+'°</div>':'')
     +'</div>';
   }
