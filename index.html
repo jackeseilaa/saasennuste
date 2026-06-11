@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.1';
+var APP_VERSION = 'v5.2';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -921,8 +921,16 @@ async function showRouteView(btn) {
       return { html:html, rows:rows };
     }
 
-    // Lähtöajat
-    var startAB = new Date(); startAB.setHours(9,0,0,0); startAB.setDate(startAB.getDate()+2);
+    // Lähtöajat — käytetään window._routeStartAB jos käyttäjä on jo asettanut
+    // Oletuksena: huominen klo 09:00 Helsinki-aikavyöhykkeellä
+    var startAB;
+    if (window._routeStartAB) {
+      startAB = new Date(window._routeStartAB);
+    } else {
+      startAB = new Date();
+      startAB.setHours(9,0,0,0);
+      startAB.setDate(startAB.getDate()+1);
+    }
     var startBA = new Date(startAB.getTime() + 2*86400000);
 
     var legAB = renderRouteEnsemble(segsAB, startAB, 'Lähtö: Helsinki \u2192 Tallinna', 'MENNESSÄ');
