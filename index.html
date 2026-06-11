@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.1';
+var APP_VERSION = 'v6.2';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -753,22 +753,34 @@ async function showRouteView(btn) {
         var ctrl = new AbortController();
         setTimeout(function(){ ctrl.abort(); }, 20000);
         return fetch(url, { signal: ctrl.signal })
-          .then(function(r){ return r.json(); })
+          .then(function(r){
+            if (!r.ok) { console.warn('HTTP '+r.status, mdl.model, wp.name); return null; }
+            return r.json();
+          })
           .then(function(d){
+            if (!d) return { key: mdl.key, ok: false, reason: 'HTTP error' };
             if (d && d.hourly && d.hourly.windspeed_10m) {
               routeCache[wi][mdl.key] = d;
-              return true;
+              return { key: mdl.key, ok: true };
             }
-            // open-meteo palautti virheen — logaa
-            if (d && d.error) console.warn('open-meteo error', mdl.key, wp.name, d.reason||'');
-            return false;
+            var reason = d.error ? (d.reason||d.error) : 'no hourly data';
+            console.warn('open-meteo:', mdl.model, wp.name, reason);
+            return { key: mdl.key, ok: false, reason: reason };
           })
-          .catch(function(e){ console.warn('fetch fail', mdl.key, wp.name, e.message); return false; });
+          .catch(function(e){
+            console.warn('fetch abort/fail:', mdl.model, wp.name, e.message);
+            return { key: mdl.key, ok: false, reason: e.message };
+          });
       });
       var results = await Promise.all(wpFetches);
-      var ok = results.filter(Boolean).length;
+      var ok = results.filter(function(r){ return r && r.ok; }).length;
+      var failed = results.filter(function(r){ return r && !r.ok; }).map(function(r){ return r.key+'('+r.reason+')'; });
       totalFetched += ok;
-      step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' mallia', ok > 0);
+      if (failed.length > 0) {
+        step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' — VIRHEET: '+failed.join(', '), ok > 0 ? true : false);
+      } else {
+        step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' mallia', true);
+      }
     }
     step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui yhteensä', totalFetched > 0);
 
