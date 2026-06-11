@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.8';
+var APP_VERSION = 'v5.9';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -759,12 +759,58 @@ async function showRouteView(btn) {
     ROUTE_WP.forEach(function(_,i){ totalFetched += Object.keys(routeCache[i]).length; });
     step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui', totalFetched > 0);
 
-    // Havaintodata: FMI Harmaja + Naissaari
-    step('Haetaan havaintodata (Harmaja + Naissaari)...', null);
-    var fmiObs = await fetchFMIobs();
-    var naissaariObs = await fetchEstonianObs(59.5660, 24.5220);
+    // Havaintodata + aaltodata rinnakkain
+    step('Haetaan havaintodata ja aaltoennuste...', null);
+    // waveCache[wpIdx] = { time:[], wave_height:[], wave_direction:[], wave_period:[], wind_wave_height:[] }
+    var waveCache = {};
+    var waveFetches = ROUTE_WP.map(function(wp, wi) {
+      var url = 'https://marine-api.open-meteo.com/v1/marine'
+        + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
+        + '&hourly=wave_height,wave_direction,wave_period,wind_wave_height'
+        + '&timezone=Europe/Helsinki&forecast_days=16';
+      var ctrl = new AbortController();
+      setTimeout(function(){ ctrl.abort(); }, 12000);
+      return fetch(url, { signal: ctrl.signal })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d && d.hourly && d.hourly.wave_height) waveCache[wi] = d.hourly; })
+        .catch(function(){});
+    });
+    var obsAndWaveFetches = [fetchFMIobs(), fetchEstonianObs(59.5660, 24.5220)].concat(waveFetches);
+    var obsAndWaveResults = await Promise.all(obsAndWaveFetches);
+    var fmiObs       = obsAndWaveResults[0];
+    var naissaariObs = obsAndWaveResults[1];
+    var wavePointsOk = Object.keys(waveCache).length;
     var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari':'');
-    step('Havainnot: '+(obsStr||'ei saatavilla'), true);
+    step('Havainnot: '+(obsStr||'ei saatavilla')+' · aalto: '+wavePointsOk+'/'+ROUTE_WP.length+' pistettä', true);
+
+    // Hae aaltodata annetulle hetkelle lähimmältä WP:ltä
+    function getWaveForPos(lat, lon, dt) {
+      var best=-1, bd=9999;
+      ROUTE_WP.forEach(function(wp,i){
+        var d=Math.abs(wp.lat-lat)+Math.abs(wp.lon-lon);
+        if(d<bd){bd=d;best=i;}
+      });
+      if (best<0 || !waveCache[best]) return null;
+      var W = waveCache[best];
+      var fmt = new Intl.DateTimeFormat('fi-FI', {
+        timeZone:'Europe/Helsinki', year:'numeric', month:'2-digit',
+        day:'2-digit', hour:'2-digit', hour12:false
+      });
+      var parts = fmt.formatToParts(dt), pp = {};
+      parts.forEach(function(p){ pp[p.type]=p.value; });
+      var target = pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':00';
+      for (var i=0; i<W.time.length; i++) {
+        if (W.time[i]===target) {
+          return {
+            height:    W.wave_height[i],
+            direction: W.wave_direction ? W.wave_direction[i] : null,
+            period:    W.wave_period ? W.wave_period[i] : null,
+            windWave:  W.wind_wave_height ? W.wind_wave_height[i] : null
+          };
+        }
+      }
+      return null;
+    }
 
     // Rakenna ensemble-data: mediaani 6 mallista (painotettu resoluution mukaan)
     // Paino: MetNO=3, DMI=3, ICON=2, ECMWF=2, GFS=1, UKMO=2
@@ -902,10 +948,11 @@ async function showRouteView(btn) {
           routing = gpxRoutingCalc(wx.wd, legBrg);
           vmg = routing.vmg;
         }
+        var wave = getWaveForPos(pos.lat, pos.lon, curTime);
         rows.push({ timeStr:fmtH(curTime), dateStr:fmtD(curTime),
           lat:pos.lat, lon:pos.lon, name:pos.name,
           distFromStart:cumNM, legBrg:legBrg,
-          wx:wx, routing:routing, arrived:false });
+          wx:wx, routing:routing, wave:wave, arrived:false });
         cumNM = Math.min(cumNM + vmg, totalNM);
         curTime = new Date(curTime.getTime() + 3600000);
       }
@@ -920,7 +967,11 @@ async function showRouteView(btn) {
       if (etaH>=24) etaStr = Math.floor(etaH/24)+'vrk '+(etaH%24)+'h';
 
       var worst={s:100,col:'#1a7a4a',bg:'#e6f4ec',lbl:'Kevyt'};
-      rows.forEach(function(r){ if(r.wx){ var si=sailCalc(Math.round(r.wx.ws),Math.round(r.wx.gust||r.wx.ws)); if(si.s<worst.s)worst=si; } });
+      var worstWave = null;
+      rows.forEach(function(r){
+        if(r.wx){ var si=sailCalc(Math.round(r.wx.ws),Math.round(r.wx.gust||r.wx.ws)); if(si.s<worst.s)worst=si; }
+        if(r.wave && r.wave.height!=null && (worstWave===null || r.wave.height>worstWave)) worstWave=r.wave.height;
+      });
 
       var startDateStr = new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',day:'numeric',month:'numeric',year:'numeric'}).format(startTime);
       var startHHMM   = new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',hour:'2-digit',minute:'2-digit',hour12:false}).format(startTime);
@@ -934,7 +985,7 @@ async function showRouteView(btn) {
       var html = '<div class="route-leg">'
         +'<div class="route-leg-head" onclick="toggleLeg(this)">'
           +'<div><div class="route-leg-name">'+legTitle+'</div>'
-          +'<div class="route-leg-date">'+startDateStr+' klo '+startHHMM+' \u00b7 '+totalNM.toFixed(0)+' M \u00b7 ETA '+etaStr+' \u00b7 perillä '+arrRow.dateStr+' '+arrRow.timeStr+'</div></div>'
+          +'<div class="route-leg-date">'+startDateStr+' klo '+startHHMM+' \u00b7 '+totalNM.toFixed(0)+' M \u00b7 ETA '+etaStr+' \u00b7 perillä '+arrRow.dateStr+' '+arrRow.timeStr+(worstWave!==null?' \u00b7 🌊 max '+worstWave.toFixed(1)+'m':'')+' </div></div>'
           +'<span class="route-leg-badge" style="color:'+worst.col+';background:'+worst.bg+'">'+worst.lbl+'</span>'
         +'</div>'
         +'<div class="route-hours">'
@@ -942,7 +993,9 @@ async function showRouteView(btn) {
           +'<span style="min-width:72px">PVM/KLO</span><span style="min-width:22px"></span>'
           +'<span style="min-width:34px">\u00b0C</span><span style="min-width:54px">TUULI</span>'
           +'<span style="min-width:44px">PUUSKA</span><span style="min-width:64px">SUUNTA</span>'
-          +'<span style="min-width:40px">HAJON</span><span style="flex:1">SIJAINTI</span><span>KELI/REIVI</span></div>';
+          +'<span style="min-width:40px">HAJON</span>'
+          +'<span style="min-width:52px">AALTO</span>'
+          +'<span style="flex:1">SIJAINTI</span><span>KELI/REIVI</span></div>';
 
       window._routeRows = window._routeRows || {};
       rows.forEach(function(row) {
@@ -972,6 +1025,9 @@ async function showRouteView(btn) {
           +'<span style="pointer-events:none;min-width:44px;font-size:11px;color:var(--muted)">\u2191'+gust2+' m/s</span>'
           +'<span style="pointer-events:none;min-width:64px;font-size:12px;display:inline-flex;align-items:center;gap:2px;color:var(--muted)">'+dirArrowS(row.wx.wd)+' '+Math.round(row.wx.wd)+'\u00b0 '+dirCard(row.wx.wd)+'</span>'
           +'<span style="pointer-events:none;min-width:40px;font-size:11px;font-weight:600;color:'+spCol+'">\u00b1'+spTxt+'</span>'
+          +(row.wave && row.wave.height != null
+            ? '<span style="pointer-events:none;min-width:52px;font-size:11px;color:'+(row.wave.height>1.5?'#b82222':row.wave.height>0.8?'#b87c1a':'#1a7a4a')+'">\u{1F30A}'+row.wave.height.toFixed(1)+'m'+(row.wave.period?' '+row.wave.period.toFixed(0)+'s':'')+'</span>'
+            : '<span style="pointer-events:none;min-width:52px;font-size:11px;color:#ccc">\u2014</span>')
           +'<span style="pointer-events:none;flex:1;font-size:11px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">\u25b6 '+row.name+' <span style="color:#c0c8d4">\u00b7 '+row.distFromStart.toFixed(0)+' M</span></span>'
           +(isBeat?'<span style="pointer-events:none;width:100%;padding:1px 14px 3px;font-size:10px;font-weight:700;color:#b87c1a">HALS '+rt.tack1+'\u00b0\u21d4'+rt.tack2+'\u00b0 \u00b7 VMG '+rt.vmg.toFixed(1)+' kts \u00b7 '+Math.round(row.legBrg)+'\u00b0</span>':'')
           +'<span style="pointer-events:none;font-size:10px;font-weight:600;padding:2px 6px;border-radius:10px;white-space:nowrap;color:'+si.col+';background:'+si.bg+'">'+si.lbl.replace(' \u2b50','')+(si.reef?' | '+si.reef:'')+'</span>'
@@ -1378,7 +1434,32 @@ window.showRouteRowDetail = function(key) {
       +'</div>'
     +'</div>';
   }
-  var html = navHtml + spreadHtml
+  // Aaltodata
+  var waveHtml = '';
+  var wave = row.wave;
+  if (wave && wave.height != null) {
+    var wh = wave.height, wp2 = wave.period, wdir = wave.direction, wwh = wave.windWave;
+    var waveCol = wh>1.5?'#b82222':wh>1.0?'#b87c1a':wh>0.5?'#0a4272':'#1a7a4a';
+    var waveDesc = wh>1.5?'Kova meri — vaikea purjehtia':wh>1.0?'Kohtalainen aalto':wh>0.5?'Lievästi aallokkoinen':'Tyyni meri';
+    var headSea = false;
+    if (wdir != null && row.legBrg != null) {
+      var relWave = ((wdir - row.legBrg) + 360) % 360;
+      headSea = relWave > 270 || relWave < 90;
+    }
+    waveHtml = '<div style="background:#e8f0f9;border:1px solid #b0c8e8;border-radius:10px;padding:10px 12px;margin-bottom:12px">'
+      +'<div style="font-weight:700;color:#0a4272;margin-bottom:6px">🌊 Aaltoennuste'+(headSea?' ⚠️ vastainen aallokko':'')+"'</div>"
+      +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center">'
+        +'<div><div style="font-size:10px;color:var(--muted)">Korkeus</div><div style="font-size:16px;font-weight:700;color:'+waveCol+'">'+wh.toFixed(1)+'<span style="font-size:11px"> m</span></div></div>'
+        +(wp2!=null?'<div><div style="font-size:10px;color:var(--muted)">Jakso</div><div style="font-size:16px;font-weight:700;color:#0a4272">'+wp2.toFixed(1)+'<span style="font-size:11px"> s</span></div></div>':'')
+        +(wdir!=null?'<div><div style="font-size:10px;color:var(--muted)">Suunta</div><div style="font-size:16px;font-weight:700;color:#0a4272">'+Math.round(wdir)+'°</div></div>':'')
+        +(wwh!=null?'<div><div style="font-size:10px;color:var(--muted)">Tuuliaall.</div><div style="font-size:16px;font-weight:700;color:#4a6a8a">'+wwh.toFixed(1)+'<span style="font-size:11px"> m</span></div></div>':'')
+      +'</div>'
+      +'<div style="margin-top:6px;font-size:12px;color:'+waveCol+'">'+waveDesc+'</div>'
+      +(headSea?'<div style="margin-top:4px;font-size:11px;color:#b87c1a">⚠️ Vastainen aallokko hidastaa VMG:tä — aallokko tulee suunnasta '+Math.round(wdir)+'°, kurssi '+Math.round(row.legBrg)+'°</div>':'')
+    +'</div>';
+  }
+
+  var html = navHtml + waveHtml + spreadHtml
     +'<div class="sail-detail-box" style="background:'+si.bg+';margin-bottom:12px">'
       +'<div style="font-size:11px;color:'+si.col+';margin-bottom:4px">'+row.dateStr+' '+row.timeStr+' \u00b7 '+row.name+'</div>'
       +'<div class="sail-detail-score" style="color:'+si.col+'">'+si.s+'<span style="font-size:18px">/100</span></div>'
