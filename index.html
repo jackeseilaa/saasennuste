@@ -311,7 +311,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v7.1';
+var APP_VERSION = 'v7.2';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -1274,6 +1274,7 @@ async function showRouteView(btn) {
       +timePanelAB
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
         +obsCard('FMI Harmaja \u2014 havainto nyt', fmiObs, false)
+        +(harmajaFcst ? harmajaFcstCard(harmajaFcst, startTime) : '')
         +obsCard('Naissaari \u2014 havainto nyt', naissaariObs, true)
         +(waveBuoyObs && waveBuoyObs.height != null ? waveBuoyCard(waveBuoyObs) : '')
       +'</div>'
@@ -1313,6 +1314,7 @@ async function showRouteView(btn) {
       +timePanelAB
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
         +obsCard('FMI Harmaja \u2014 havainto nyt', fmiObs, false)
+        +(harmajaFcst ? harmajaFcstCard(harmajaFcst, startTime) : '')
         +obsCard('Naissaari \u2014 havainto nyt', naissaariObs, true)
         +(waveBuoyObs && waveBuoyObs.height != null ? waveBuoyCard(waveBuoyObs) : '')
       +'</div>'
