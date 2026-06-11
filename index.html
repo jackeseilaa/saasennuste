@@ -311,7 +311,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v7.2';
+var APP_VERSION = 'v7.3';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -545,7 +545,7 @@ function parseFMIwave(xmlText) {
 async function fetchFMIwave(lat, lon) {
   try {
     var ctrl = new AbortController();
-    setTimeout(function(){ ctrl.abort(); }, 10000);
+    setTimeout(function(){ ctrl.abort(); }, 6000);
     var r = await fetch(buildFMIWaveUrl(lat, lon, 60), { signal: ctrl.signal });
     if (!r.ok) return null;
     var xml = await r.text();
@@ -883,25 +883,26 @@ async function showRouteView(btn) {
     var waveCache = {};
     var waveBuoyObs = null;
 
+    // Kaikki haut rinnakkain — ei peräkkäisiä odotteluja
+    // FMI WAM kaikille WP:ille samanaikaisesti (lyhyt 8s timeout per piste)
+    var waveFetchPromises = ROUTE_WP.map(function(wp, wwi) {
+      return fetchFMIwave(wp.lat, wp.lon).then(function(wdata) {
+        if (wdata && wdata.times.length > 0) waveCache[wwi] = wdata;
+      });
+    });
+
     var obsResults = await Promise.all([
       fetchFMIobs(),
       fetchEstonianObs(59.5660, 24.5220),
-      fetchHelsinkiWaveBuoy()
-    ]);
+      fetchHelsinkiWaveBuoy(),
+      fetchHarmajaForecast(startTime)
+    ].concat(waveFetchPromises));
+
     var fmiObs       = obsResults[0];
     var naissaariObs = obsResults[1];
     waveBuoyObs      = obsResults[2];
-
-    // FMI WAM per WP peräkkäin (FMI WFS ei tue 5 samanaikaista hyvin)
-    var waveOk = 0;
-    for (var wwi = 0; wwi < ROUTE_WP.length; wwi++) {
-      var wwp = ROUTE_WP[wwi];
-      var wdata = await fetchFMIwave(wwp.lat, wwp.lon);
-      if (wdata && wdata.times.length > 0) {
-        waveCache[wwi] = wdata;
-        waveOk++;
-      }
-    }
+    var harmajaFcst  = obsResults[3];
+    var waveOk = Object.keys(waveCache).length;
 
     var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari ':'')
                + (waveBuoyObs&&waveBuoyObs.height?'AaltoPoiju ':'');
