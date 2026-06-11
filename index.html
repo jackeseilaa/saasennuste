@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v6.2';
+var APP_VERSION = 'v6.3';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -721,68 +721,49 @@ async function showRouteView(btn) {
     var totalNM = totalDist(segsAB);
     step('Geometria OK — '+totalNM.toFixed(1)+' M, '+segsAB.length+' jalkaa', true);
 
-    // Hae 3 mallia jokaiselle reittipisteelle
-    // maxDays = open-meteo:n tukema maksimi per malli
-    // dmi_seamless = DMI HARMONIE + ECMWF jatkona → kattaa koko Itämeren/Suomenlahden
+    // 3 luotettavaa mallia — globaalit/pohjoismaiset, toimivat kaikilla Suomenlahden koordinaateilla
+    // Yksi pyyntö per WP per malli, peräkkäin jotta ei ylikuormiteta selaimen yhteyspoolia
     var MODELS = [
-      { key:'metno',  model:'metno_nordic',    label:'MetNO', shortLabel:'MetNO 1km',   maxDays:7  },
-      { key:'dmi',    model:'dmi_seamless',    label:'DMI',   shortLabel:'DMI saumaton', maxDays:7  },
-      { key:'icon',   model:'icon_seamless',   label:'ICON',  shortLabel:'ICON 2-11km', maxDays:16 },
-      { key:'ecmwf',  model:'ecmwf_ifs',       label:'ECMWF', shortLabel:'ECMWF 9km',  maxDays:15 },
-      { key:'gfs',    model:'gfs_seamless',    label:'GFS',   shortLabel:'GFS 3-25km', maxDays:16 },
-      { key:'ukmo',   model:'ukmo_seamless',   label:'UKMO',  shortLabel:'UKMO 2-10km',maxDays:7  }
+      { key:'metno', model:'metno_nordic',   label:'MetNO', shortLabel:'MetNO 1km',  maxDays:7  },
+      { key:'icon',  model:'icon_seamless',  label:'ICON',  shortLabel:'ICON 2-11km',maxDays:7  },
+      { key:'gfs',   model:'gfs_seamless',   label:'GFS',   shortLabel:'GFS 3-25km', maxDays:7  }
     ];
-    step('Haetaan 6 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
+    step('Haetaan '+MODELS.length+' mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
 
-    // routeCache[wpIdx][modelKey] = hourly data
-    // Haetaan WP kerrallaan (5 pistettä), per WP kaikki 6 mallia rinnakkain
-    // Max 6 samanaikaista yhteyttä — vältetään selaimen throttling 30 yhtäaikaisella haulla
     var routeCache = {};
     ROUTE_WP.forEach(function(wp, i){ routeCache[i] = {}; });
 
+    // Hae yksi malli kerrallaan, kaikki WP:t rinnakkain (max 5 yhteyttä per haku)
     var totalFetched = 0;
-    for (var wi = 0; wi < ROUTE_WP.length; wi++) {
-      var wp = ROUTE_WP[wi];
-      step('Haetaan WP '+(wi+1)+'/'+ROUTE_WP.length+': '+wp.name+' ('+MODELS.length+' mallia)...', null);
-      var wpFetches = MODELS.map(function(mdl) {
+    for (var mi = 0; mi < MODELS.length; mi++) {
+      var mdl = MODELS[mi];
+      step('Haetaan '+mdl.label+' ('+ROUTE_WP.length+' pistettä)...', null);
+      var mdlFetches = ROUTE_WP.map(function(wp, wi) {
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
           + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
-          + '&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model
-          + '&forecast_days='+(mdl.maxDays||7);
+          + '&windspeed_unit=ms&timezone=Europe/Helsinki'
+          + '&models='+mdl.model+'&forecast_days='+(mdl.maxDays||7);
         var ctrl = new AbortController();
-        setTimeout(function(){ ctrl.abort(); }, 20000);
+        setTimeout(function(){ ctrl.abort(); }, 25000);
         return fetch(url, { signal: ctrl.signal })
-          .then(function(r){
-            if (!r.ok) { console.warn('HTTP '+r.status, mdl.model, wp.name); return null; }
-            return r.json();
-          })
+          .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(d){
-            if (!d) return { key: mdl.key, ok: false, reason: 'HTTP error' };
             if (d && d.hourly && d.hourly.windspeed_10m) {
               routeCache[wi][mdl.key] = d;
-              return { key: mdl.key, ok: true };
+              totalFetched++;
+              return true;
             }
-            var reason = d.error ? (d.reason||d.error) : 'no hourly data';
-            console.warn('open-meteo:', mdl.model, wp.name, reason);
-            return { key: mdl.key, ok: false, reason: reason };
+            if (d && d.error) console.warn(mdl.model, wp.name, d.reason||d.error);
+            return false;
           })
-          .catch(function(e){
-            console.warn('fetch abort/fail:', mdl.model, wp.name, e.message);
-            return { key: mdl.key, ok: false, reason: e.message };
-          });
+          .catch(function(e){ console.warn(mdl.model, wp.name, e.message); return false; });
       });
-      var results = await Promise.all(wpFetches);
-      var ok = results.filter(function(r){ return r && r.ok; }).length;
-      var failed = results.filter(function(r){ return r && !r.ok; }).map(function(r){ return r.key+'('+r.reason+')'; });
-      totalFetched += ok;
-      if (failed.length > 0) {
-        step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' — VIRHEET: '+failed.join(', '), ok > 0 ? true : false);
-      } else {
-        step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' mallia', true);
-      }
+      var res = await Promise.all(mdlFetches);
+      var ok = res.filter(Boolean).length;
+      step(mdl.label+': '+ok+'/'+ROUTE_WP.length+' pistettä OK', ok > 0);
     }
-    step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui yhteensä', totalFetched > 0);
+    step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' hakua onnistui', totalFetched > 0);
 
     // Havaintodata + aaltodata rinnakkain
     step('Haetaan havaintodata ja aaltoennuste...', null);
@@ -839,10 +820,10 @@ async function showRouteView(btn) {
 
     // Rakenna ensemble-data: mediaani 6 mallista (painotettu resoluution mukaan)
     // Paino: MetNO=3, DMI=3, ICON=2, ECMWF=2, GFS=1, UKMO=2
-    var MODEL_WEIGHTS = { metno:3, dmi:3, icon:2, ecmwf:2, gfs:1, ukmo:2 };
+    var MODEL_WEIGHTS = { metno:3, icon:2, gfs:1 };
     // Avomeri-puuskakerroin per malli (käytetään kun malli ei anna windgusts_10m)
     // Suomenlahti: avomeri ilman pinnankarheutta, tyypillinen gust/mean ~1.35-1.45
-    var MODEL_GUST_FACTOR = { metno:1.40, dmi:1.35, icon:1.30, ecmwf:1.35, gfs:1.35, ukmo:1.35 };
+    var MODEL_GUST_FACTOR = { metno:1.40, icon:1.30, gfs:1.35 };
 
     function ensembleWx(wi, dt) {
       var wds = [], wss = [], gusts = [], temps = [], wcs = [];
@@ -1129,7 +1110,7 @@ async function showRouteView(btn) {
 
     // Spread-selite
     var spreadLegend = '<div style="display:flex;gap:10px;font-size:11px;margin-bottom:8px;flex-wrap:wrap">'
-      +'<span>\u00b1 = mallien hajonta (6 mallia: MetNO+DMI+ICON+ECMWF+GFS+UKMO)</span>'
+      +'<span>\u00b1 = mallien hajonta (MetNO+ICON+GFS)</span>'
       +'<span style="color:#1a7a4a">\u25cf &lt;1.5 m/s = hyvä yksimielisyys</span>'
       +'<span style="color:#b87c1a">\u25cf 1.5–3 m/s = kohtalainen</span>'
       +'<span style="color:#b82222">\u25cf &gt;3 m/s = suuri epävarmuus</span>'
@@ -1202,7 +1183,7 @@ async function showRouteView(btn) {
       +'<div class="sec-label" style="margin-top:16px">PALUUSSA \u00b7 '+new Intl.DateTimeFormat('fi-FI',{day:'numeric',month:'numeric',year:'numeric'}).format(startBA)+' klo '+new Intl.DateTimeFormat('fi-FI',{hour:'2-digit',minute:'2-digit',hour12:false}).format(startBA)+'</div>'
       +legBA.html
       +gpxExportBtns
-      +'<div class="update-info">6-mallin ensemble \u00b7 MetNO+DMI+ICON+ECMWF+GFS+UKMO \u00b7 FMI Harmaja+Naissaari \u00b7 '+APP_VERSION+'</div>';
+      +'<div class="update-info">3-mallin ensemble \u00b7 MetNO+ICON+GFS \u00b7 FMI Harmaja+Naissaari \u00b7 '+APP_VERSION+'</div>';
 
   } catch(err) {
     logEl.innerHTML = '<div class="err" style="text-align:left;font-size:13px">'
@@ -1417,11 +1398,8 @@ window.showRouteRowDetail = function(key) {
   if (wx.models > 1 && wx.perModel) {
     var modelDefs = [
       { key:'metno', label:'MetNO', sub:'1 km' },
-      { key:'dmi',   label:'DMI',   sub:'2 km' },
       { key:'icon',  label:'ICON',  sub:'2-11km' },
-      { key:'ecmwf', label:'ECMWF', sub:'9 km' },
-      { key:'gfs',   label:'GFS',   sub:'3-25km' },
-      { key:'ukmo',  label:'UKMO',  sub:'2-10km' }
+      { key:'gfs',   label:'GFS',   sub:'3-25km' }
     ];
     var mdlCols = modelDefs.filter(function(m){ return wx.perModel[m.key] != null; });
     var mdlGrid = mdlCols.map(function(m){
