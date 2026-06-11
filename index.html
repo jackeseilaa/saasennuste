@@ -197,7 +197,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
     </svg>
     Purjehdussää
   </h1>
-  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">v5.0</span>
+  <span class="version" id="ver-badge" style="cursor:pointer" onclick="checkVersionManual()" title="Napauta tarkistaaksesi päivitykset">...</span>
 </div>
 
 <script>
@@ -247,11 +247,11 @@ function checkVersionManual() {
     badge.textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v2.8';
   });
 }
-// Automaattinen tarkistus vasta 8s sivulatauksen jälkeen — load() ehtii valmistua ensin
+// Automaattinen tarkistus 3s sivulatauksen jälkeen
 window.addEventListener('load', function(){
   setTimeout(function(){
-    if (typeof APP_VERSION !== 'undefined') checkVersionManual();
-  }, 8000);
+    checkVersionManual();
+  }, 3000);
 });
 window.checkVersionManual = checkVersionManual;
 </script>
@@ -307,7 +307,12 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.5';
+var APP_VERSION = 'v5.6';
+// Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
+(function(){
+  var b = document.getElementById('ver-badge');
+  if (b) b.textContent = APP_VERSION;
+})();
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
