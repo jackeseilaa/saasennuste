@@ -307,7 +307,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.2';
+var APP_VERSION = 'v5.3';
 
 // ── QUARTET POLAARINEN (globaali, muokattavissa) ──────────
 // Absolut 37, 11m, ~75m² pääpurjeisto
@@ -666,7 +666,7 @@ function totalDist(segs) {
 }
 
 // ── ROUTE VIEW — kilpapurjehtija-tason ensemble ───────────
-// 3 mallia: ICON-seamless + ECMWF IFS + MetNO Nordic
+// 6 mallia: MetNO Nordic + DMI HARMONIE + ICON Seamless + ECMWF IFS HRES + GFS Seamless + UKMO Seamless
 // Havaintoasemat: FMI Harmaja (100539), Naissaari/Pakri EMHI via FMI
 var ROUTE_WP = [
   { name:'Harmaja',            lat:60.1054, lon:24.9757, fmisid:'100539' },
@@ -713,11 +713,14 @@ async function showRouteView(btn) {
 
     // Hae 3 mallia jokaiselle reittipisteelle
     var MODELS = [
-      { key:'icon',   model:'icon_seamless',  label:'ICON' },
-      { key:'ecmwf',  model:'ecmwf_ifs025',   label:'ECMWF' },
-      { key:'metno',  model:'metno_nordic',   label:'MetNO' }
+      { key:'metno',  model:'metno_nordic',              label:'MetNO',  shortLabel:'MetNO 1km' },
+      { key:'dmi',    model:'dmi_harmonie_arome_europe',  label:'DMI',    shortLabel:'DMI 2km' },
+      { key:'icon',   model:'icon_seamless',              label:'ICON',   shortLabel:'ICON 2-11km' },
+      { key:'ecmwf',  model:'ecmwf_ifs',                  label:'ECMWF',  shortLabel:'ECMWF 9km' },
+      { key:'gfs',    model:'gfs_seamless',               label:'GFS',    shortLabel:'GFS 3-25km' },
+      { key:'ukmo',   model:'ukmo_seamless',              label:'UKMO',   shortLabel:'UKMO 2-10km' }
     ];
-    step('Haetaan 3 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
+    step('Haetaan 6 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
 
     // routeCache[wpIdx][modelKey] = hourly data
     var routeCache = {};
@@ -753,9 +756,13 @@ async function showRouteView(btn) {
     var obsStr = (fmiObs&&!isNaN(fmiObs.windspeed)?'Harmaja ':'') + (naissaariObs?'Naissaari':'');
     step('Havainnot: '+(obsStr||'ei saatavilla'), true);
 
-    // Rakenna ensemble-data: mediaani/spread kolmesta mallista
+    // Rakenna ensemble-data: mediaani 6 mallista (painotettu resoluution mukaan)
+    // Paino: MetNO=3, DMI=3, ICON=2, ECMWF=2, GFS=1, UKMO=2
+    var MODEL_WEIGHTS = { metno:3, dmi:3, icon:2, ecmwf:2, gfs:1, ukmo:2 };
     function ensembleWx(wi, dt) {
       var wds = [], wss = [], gusts = [], temps = [], wcs = [];
+      var wWeights = [];
+      var perModel = {};
       MODELS.forEach(function(mdl) {
         var d = routeCache[wi][mdl.key];
         if (!d||!d.hourly) return;
@@ -769,36 +776,50 @@ async function showRouteView(btn) {
         var target = pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':00';
         for (var i=0; i<H.time.length; i++) {
           if (H.time[i]===target) {
-            wss.push(H.windspeed_10m[i]);
-            wds.push(H.winddirection_10m[i]);
-            gusts.push(H.windgusts_10m ? H.windgusts_10m[i] : H.windspeed_10m[i]*1.3);
-            temps.push(H.temperature_2m[i]);
-            wcs.push(H.weathercode[i]);
+            var ws = H.windspeed_10m[i];
+            var wd = H.winddirection_10m[i];
+            var gust = H.windgusts_10m ? H.windgusts_10m[i] : ws*1.3;
+            var temp = H.temperature_2m[i];
+            var wc = H.weathercode[i];
+            if (ws == null || wd == null) break;
+            var w = MODEL_WEIGHTS[mdl.key] || 1;
+            wss.push(ws); wds.push(wd); gusts.push(gust);
+            temps.push(temp); wcs.push(wc); wWeights.push(w);
+            perModel[mdl.key] = ws;
             break;
           }
         }
       });
       if (!wss.length) return null;
-      // Tuulensuunta: vektorikeskiarvo
-      var sinSum=0, cosSum=0;
-      wds.forEach(function(d){ sinSum+=Math.sin(d*Math.PI/180); cosSum+=Math.cos(d*Math.PI/180); });
-      var wdMean = (Math.atan2(sinSum/wds.length, cosSum/wds.length)*180/Math.PI+360)%360;
-      var wsMean = wss.reduce(function(a,b){return a+b;},0)/wss.length;
+      // Tuulensuunta: painotettu vektorikeskiarvo
+      var sinSum=0, cosSum=0, wTot=0;
+      wds.forEach(function(d,i){
+        sinSum+=Math.sin(d*Math.PI/180)*wWeights[i];
+        cosSum+=Math.cos(d*Math.PI/180)*wWeights[i];
+        wTot+=wWeights[i];
+      });
+      var wdMean = (Math.atan2(sinSum/wTot, cosSum/wTot)*180/Math.PI+360)%360;
+      // Painotettu keskiarvo tuulelle
+      var wsWsum=0;
+      wss.forEach(function(v,i){ wsWsum+=v*wWeights[i]; });
+      var wsMean = wsWsum / wTot;
       var wsMax  = Math.max.apply(null, wss);
       var wsMin  = Math.min.apply(null, wss);
       var spread = wsMax - wsMin;
-      var gustMean = gusts.reduce(function(a,b){return a+b;},0)/gusts.length;
-      var tempMean = temps.reduce(function(a,b){return a+b;},0)/temps.length;
+      var gustSum=0, tempSum=0;
+      gusts.forEach(function(v,i){ gustSum+=v*wWeights[i]; });
+      temps.forEach(function(v,i){ tempSum+=v*wWeights[i]; });
+      var gustMean = gustSum / wTot;
+      var tempMean = tempSum / wTot;
       // Pahin sää
       var wc = wcs.reduce(function(a,b){ return b>a?b:a; }, 0);
-      return {
+      var result = {
         ws:wsMean, wd:wdMean, gust:gustMean, temp:tempMean, wc:wc,
         spread:spread, wsMin:wsMin, wsMax:wsMax,
         models: wss.length,
-        icon:  routeCache[wi]['icon']  ? wss[MODELS.findIndex(function(m){return m.key==='icon';})]  : null,
-        ecmwf: routeCache[wi]['ecmwf'] ? wss[MODELS.findIndex(function(m){return m.key==='ecmwf';})] : null,
-        metno: routeCache[wi]['metno'] ? wss[MODELS.findIndex(function(m){return m.key==='metno';})] : null
+        perModel: perModel
       };
+      return result;
     }
 
     // Hae lähimmän WP:n ensemble-data
@@ -981,7 +1002,7 @@ async function showRouteView(btn) {
 
     // Spread-selite
     var spreadLegend = '<div style="display:flex;gap:10px;font-size:11px;margin-bottom:8px;flex-wrap:wrap">'
-      +'<span>\u00b1 = mallien hajonta (ICON+ECMWF+MetNO)</span>'
+      +'<span>\u00b1 = mallien hajonta (6 mallia: MetNO+DMI+ICON+ECMWF+GFS+UKMO)</span>'
       +'<span style="color:#1a7a4a">\u25cf &lt;1.5 m/s = hyvä yksimielisyys</span>'
       +'<span style="color:#b87c1a">\u25cf 1.5–3 m/s = kohtalainen</span>'
       +'<span style="color:#b82222">\u25cf &gt;3 m/s = suuri epävarmuus</span>'
@@ -1054,7 +1075,7 @@ async function showRouteView(btn) {
       +'<div class="sec-label" style="margin-top:16px">PALUUSSA \u00b7 '+new Intl.DateTimeFormat('fi-FI',{day:'numeric',month:'numeric',year:'numeric'}).format(startBA)+' klo '+new Intl.DateTimeFormat('fi-FI',{hour:'2-digit',minute:'2-digit',hour12:false}).format(startBA)+'</div>'
       +legBA.html
       +gpxExportBtns
-      +'<div class="update-info">3-mallin ensemble \u00b7 ICON+ECMWF+MetNO \u00b7 FMI Harmaja+Naissaari \u00b7 '+APP_VERSION+'</div>';
+      +'<div class="update-info">6-mallin ensemble \u00b7 MetNO+DMI+ICON+ECMWF+GFS+UKMO \u00b7 FMI Harmaja+Naissaari \u00b7 '+APP_VERSION+'</div>';
 
   } catch(err) {
     logEl.innerHTML = '<div class="err" style="text-align:left;font-size:13px">'
@@ -1264,17 +1285,37 @@ window.showRouteRowDetail = function(key) {
       +'<div style="font-weight:700;color:#1a7a4a">\u2714 Vapaatuuli — suorakurssi '+Math.round(row.legBrg)+'\u00b0</div>'
       +'<div style="font-size:12px;color:#1a7a4a">TWA '+Math.round(rt.twa)+'\u00b0 \u00b7 nopeus '+rt.speed.toFixed(1)+' kts</div></div>';
   }
-  // Ensemble-hajontatiedot
+  // Ensemble-hajontatiedot — dynaaminen 6-mallin vertailu
   var spreadHtml = '';
-  if (wx.models > 1) {
+  if (wx.models > 1 && wx.perModel) {
+    var modelDefs = [
+      { key:'metno', label:'MetNO', sub:'1 km' },
+      { key:'dmi',   label:'DMI',   sub:'2 km' },
+      { key:'icon',  label:'ICON',  sub:'2-11km' },
+      { key:'ecmwf', label:'ECMWF', sub:'9 km' },
+      { key:'gfs',   label:'GFS',   sub:'3-25km' },
+      { key:'ukmo',  label:'UKMO',  sub:'2-10km' }
+    ];
+    var mdlCols = modelDefs.filter(function(m){ return wx.perModel[m.key] != null; });
+    var colW = Math.floor(100/mdlCols.length);
+    var mdlGrid = mdlCols.map(function(m){
+      var v = wx.perModel[m.key];
+      var diff = v - wx.ws;
+      var diffCol = Math.abs(diff)<0.5?'#1a7a4a':Math.abs(diff)<1.5?'#b87c1a':'#b82222';
+      var diffStr = (diff>=0?'+':'')+diff.toFixed(1);
+      return '<div style="text-align:center;padding:4px 2px">'
+        +'<div style="font-size:10px;font-weight:700;color:#0a4272">'+m.label+'</div>'
+        +'<div style="font-size:9px;color:var(--muted)">'+m.sub+'</div>'
+        +'<div style="font-size:14px;font-weight:700;margin:2px 0">'+v.toFixed(1)+'</div>'
+        +'<div style="font-size:10px;color:'+diffCol+'">'+diffStr+'</div>'
+        +'</div>';
+    }).join('');
     spreadHtml = '<div style="background:#f0f4f8;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">'
-      +'<div style="font-weight:700;color:#0a4272;margin-bottom:6px">Mallivertailu ('+wx.models+' mallia)</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center">'
-      +(wx.icon  != null ? '<div><div style="font-size:10px;color:var(--muted)">ICON</div><div style="font-weight:700">'+wx.icon.toFixed(1)+' m/s</div></div>' : '')
-      +(wx.ecmwf != null ? '<div><div style="font-size:10px;color:var(--muted)">ECMWF</div><div style="font-weight:700">'+wx.ecmwf.toFixed(1)+' m/s</div></div>' : '')
-      +(wx.metno != null ? '<div><div style="font-size:10px;color:var(--muted)">MetNO</div><div style="font-weight:700">'+wx.metno.toFixed(1)+' m/s</div></div>' : '')
+      +'<div style="font-weight:700;color:#0a4272;margin-bottom:6px">Mallivertailu ('+wx.models+'/6) · painotettu keskiarvo '+wx.ws.toFixed(1)+' m/s</div>'
+      +'<div style="display:grid;grid-template-columns:repeat('+mdlCols.length+',1fr);gap:4px;background:#fff;border-radius:6px;padding:6px">'
+      +mdlGrid
       +'</div>'
-      +'<div style="margin-top:6px;color:var(--muted)">Vaihteluväli: '+wx.wsMin.toFixed(1)+'–'+wx.wsMax.toFixed(1)+' m/s (hajonta ±'+wx.spread.toFixed(1)+')</div>'
+      +'<div style="margin-top:6px;color:var(--muted)">Vaihteluväli: '+wx.wsMin.toFixed(1)+'–'+wx.wsMax.toFixed(1)+' m/s · hajonta ±'+wx.spread.toFixed(1)+' m/s</div>'
     +'</div>';
   }
   var html = navHtml + spreadHtml
