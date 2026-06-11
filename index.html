@@ -201,57 +201,62 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 </div>
 
 <script>
-// Versiotarkistus — VAIN manuaalinen napautus tai 8s viive sivulatauksen jälkeen
-// Ei häiritse load()-funktiota
+// Versiotarkistus — haetaan erillinen pienikokoinen version.json, ei koko index.html
+// Tämä välttää GitHub raw -CDN-cachen, joka ignoroi ?t=-parametrin iOS Safarilla
 function checkVersionManual() {
   var badge = document.getElementById('ver-badge');
-  var localVer = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : 'v2.8';
+  // localVer luetaan APP_VERSION:sta — se on määritelty myöhemmin pääskriptissä
+  // Jos kutsutaan ennen pääskriptiä, odotetaan
+  var localVer = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : null;
+  if (!localVer) { return; } // ei vielä ladattu
   badge.textContent = '⟳';
-  fetch('https://raw.githubusercontent.com/jackeseilaa/saasennuste/main/index.html?t=' + Date.now(),
-    { cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }
-  ).then(function(r){ return r.text(); })
+  // Käytetään GitHub API:a (ei raw CDN) — palauttaa aina tuoreimman commitin
+  var apiUrl = 'https://api.github.com/repos/jackeseilaa/saasennuste/contents/index.html';
+  fetch(apiUrl, {
+    headers: { 'Accept': 'application/vnd.github.v3.raw' },
+    cache: 'no-store'
+  })
+  .then(function(r){ return r.text(); })
   .then(function(txt) {
     var m = txt.match(/var APP_VERSION\s*=\s*'(v[\d.]+)'/);
     var remoteVer = m ? m[1] : null;
-    badge.textContent = localVer;
-    if (remoteVer && remoteVer !== localVer) {
-      badge.textContent = remoteVer + ' ★';
+    if (!remoteVer) { badge.textContent = localVer; return; }
+    if (remoteVer !== localVer) {
+      badge.textContent = localVer;
       badge.style.cssText = 'background:rgba(255,200,0,0.35);border-radius:6px;padding:2px 6px;cursor:pointer;font-weight:700';
-      // Poista vanha banneri
-      var old = document.getElementById('upd');
-      if (old) old.remove();
+      var upd = document.getElementById('upd');
+      if (upd) upd.remove();
       var b = document.createElement('div');
       b.id = 'upd';
       b.style.cssText = 'background:#1a7a4a;color:#fff;text-align:center;padding:10px;font-size:14px;font-weight:600;cursor:pointer;position:fixed;top:0;left:0;right:0;z-index:9999';
       b.textContent = '\u2B06 Versio ' + remoteVer + ' saatavilla — napauta ladataksesi';
       b.onclick = function(){
-        // Tyhjennä service worker -cache jos saatavilla, sitten reload
         if (window.caches) {
           caches.keys().then(function(keys){
             return Promise.all(keys.map(function(k){ return caches.delete(k); }));
           }).then(function(){
-            window.location.href = location.pathname + '?nocache=' + Date.now();
+            window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
           }).catch(function(){
-            window.location.href = location.pathname + '?nocache=' + Date.now();
+            window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
           });
         } else {
-          window.location.href = location.pathname + '?nocache=' + Date.now();
+          window.location.href = location.pathname + '?v=' + remoteVer.replace('.','');
         }
       };
       document.body.prepend(b);
     } else {
       badge.textContent = localVer + ' ✓';
-      setTimeout(function(){ badge.textContent = localVer; badge.style.cssText='cursor:pointer'; }, 2000);
+      setTimeout(function(){ badge.textContent = localVer; badge.removeAttribute('style'); badge.style.cursor='pointer'; }, 2000);
     }
   }).catch(function(){
-    badge.textContent = typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'v2.8';
+    badge.textContent = localVer;
   });
 }
-// Automaattinen tarkistus 3s sivulatauksen jälkeen
+// Automaattinen tarkistus 5s latauksen jälkeen
 window.addEventListener('load', function(){
   setTimeout(function(){
-    checkVersionManual();
-  }, 3000);
+    if (typeof APP_VERSION !== 'undefined') checkVersionManual();
+  }, 5000);
 });
 window.checkVersionManual = checkVersionManual;
 </script>
@@ -307,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.6';
+var APP_VERSION = 'v5.7';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
