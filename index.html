@@ -312,7 +312,7 @@ window.checkVersionManual = checkVersionManual;
 </div>
 
 <script>
-var APP_VERSION = 'v5.9';
+var APP_VERSION = 'v6.0';
 // Päivitä versio-badge välittömästi ilman viivettä tai verkkohaun odottamista
 (function(){
   var b = document.getElementById('ver-badge');
@@ -733,31 +733,41 @@ async function showRouteView(btn) {
     step('Haetaan 6 mallia × '+ROUTE_WP.length+' pistettä ('+(MODELS.length*ROUTE_WP.length)+' hakua)...', null);
 
     // routeCache[wpIdx][modelKey] = hourly data
+    // Haetaan WP kerrallaan (5 pistettä), per WP kaikki 6 mallia rinnakkain
+    // Max 6 samanaikaista yhteyttä — vältetään selaimen throttling 30 yhtäaikaisella haulla
     var routeCache = {};
     ROUTE_WP.forEach(function(wp, i){ routeCache[i] = {}; });
 
-    var allFetches = [];
-    ROUTE_WP.forEach(function(wp, wi) {
-      MODELS.forEach(function(mdl) {
+    var totalFetched = 0;
+    for (var wi = 0; wi < ROUTE_WP.length; wi++) {
+      var wp = ROUTE_WP[wi];
+      step('Haetaan WP '+(wi+1)+'/'+ROUTE_WP.length+': '+wp.name+' ('+MODELS.length+' mallia)...', null);
+      var wpFetches = MODELS.map(function(mdl) {
         var url = 'https://api.open-meteo.com/v1/forecast'
           + '?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
           + '&hourly=temperature_2m,windspeed_10m,winddirection_10m,windgusts_10m,weathercode'
           + '&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model+'&forecast_days=16';
-        var c = new AbortController();
-        setTimeout(function(){ c.abort(); }, 15000);
-        allFetches.push(
-          fetch(url, { signal:c.signal })
-            .then(function(r){ return r.json(); })
-            .then(function(d){ if (d && d.hourly) routeCache[wi][mdl.key] = d; })
-            .catch(function(){})
-        );
+        var ctrl = new AbortController();
+        setTimeout(function(){ ctrl.abort(); }, 20000);
+        return fetch(url, { signal: ctrl.signal })
+          .then(function(r){ return r.json(); })
+          .then(function(d){
+            if (d && d.hourly && d.hourly.windspeed_10m) {
+              routeCache[wi][mdl.key] = d;
+              return true;
+            }
+            // open-meteo palautti virheen — logaa
+            if (d && d.error) console.warn('open-meteo error', mdl.key, wp.name, d.reason||'');
+            return false;
+          })
+          .catch(function(e){ console.warn('fetch fail', mdl.key, wp.name, e.message); return false; });
       });
-    });
-    await Promise.all(allFetches);
-
-    var totalFetched = 0;
-    ROUTE_WP.forEach(function(_,i){ totalFetched += Object.keys(routeCache[i]).length; });
-    step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui', totalFetched > 0);
+      var results = await Promise.all(wpFetches);
+      var ok = results.filter(Boolean).length;
+      totalFetched += ok;
+      step('WP '+(wi+1)+' '+wp.name+': '+ok+'/'+MODELS.length+' mallia', ok > 0);
+    }
+    step(totalFetched+'/'+(MODELS.length*ROUTE_WP.length)+' mallihakua onnistui yhteensä', totalFetched > 0);
 
     // Havaintodata + aaltodata rinnakkain
     step('Haetaan havaintodata ja aaltoennuste...', null);
