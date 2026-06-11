@@ -6,6 +6,30 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<script>
+// Pakota aina tuorein versio — jos URL ei sisällä nocache-parametria, lisää se
+(function(){
+  var CURRENT = 'v7.5';
+  var p = window.location.search;
+  if (p.indexOf('nocache') === -1 && p.indexOf('v='+CURRENT) === -1) {
+    // Unregister kaikki service workerit
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(r){ r.unregister(); });
+      });
+    }
+    // Tyhjennä caches API
+    if (window.caches) {
+      caches.keys().then(function(keys){
+        keys.forEach(function(k){ caches.delete(k); });
+      });
+    }
+    // Redirectaa timestampilla — pakottaa CDN:n hakemaan uuden version
+    window.location.replace(location.pathname + '?v=' + CURRENT + '&t=' + Date.now());
+  }
+})();
+</script>
+<meta http-equiv="Expires" content="0">
 <title>Purjehdussää v5.0</title>
 <meta name="theme-color" content="#0a4272">
 <style>
