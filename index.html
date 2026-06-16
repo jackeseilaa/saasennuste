@@ -209,7 +209,6 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
   <button class="ql active" onclick="setLoc('Harmaja',60.1054,24.9757,this)">Harmaja</button>
   <button class="ql" onclick="setLoc('Itätoukki',60.2347,25.1989,this)">Itätoukki</button>
   <button class="ql" onclick="setLoc('Mäkiluoto',59.9197,24.3503,this)">Mäkiluoto</button>
-  <button class="ql" onclick="setLoc('Helsinki',60.1699,24.9384,this)">Helsinki</button>
   <button class="ql" onclick="setLoc('Hanko',59.8264,23.0010,this)">Hanko</button>
   <button class="ql" onclick="setLoc('Turku',60.4518,22.2666,this)">Turku</button>
   <button class="ql" onclick="setLoc('Tallinna',59.4370,24.7536,this)">Tallinna</button>
@@ -249,7 +248,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 <script>
 // Cache-buster: pakota tuorein versio
 (function(){
-  var CURRENT = 'v8.1';
+  var CURRENT = 'v8.2';
   var p = window.location.search;
   if (p.indexOf('nocache') === -1 && p.indexOf('v='+CURRENT) === -1) {
     if (window.caches) { caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }); }
@@ -288,7 +287,7 @@ function checkVersionManual() {
 window.checkVersionManual = checkVersionManual;
 </script>
 <script>
-var APP_VERSION = 'v8.1';
+var APP_VERSION = 'v8.2';
 (function(){ var b = document.getElementById('ver-badge'); if (b) b.textContent = APP_VERSION; })();
 
 // ── ASETUKSET ─────────────────────────────────────────────
