@@ -213,6 +213,17 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
   <button class="ql" onclick="setLoc('Turku',60.4518,22.2666,this)">Turku</button>
   <button class="ql" onclick="setLoc('Tallinna',59.4370,24.7536,this)">Tallinna</button>
   <button class="ql" onclick="setLoc('Riihimäki',60.7471,24.7591,this)">🏠 Riihimäki</button>
+  <button class="ql" style="background:rgba(100,160,255,0.15);border-color:rgba(100,160,255,0.4);color:#4a90d9" onclick="document.getElementById('gpx-file').click()">📁 GPX-reitti</button>
+</div>
+<input type="file" id="gpx-file" accept=".gpx" style="display:none" onchange="loadGPXFile(this)">
+
+<div id="route-panel" style="display:none;padding:4px 12px 8px">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span id="route-info" style="font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis"></span>
+    <input type="datetime-local" id="route-dep" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;color:var(--text);background:#fff">
+    <button onclick="calcRoute()" style="font-size:13px;font-weight:700;padding:5px 14px;background:#0a4272;color:#fff;border:none;border-radius:6px;cursor:pointer">⛵ Laske</button>
+    <button onclick="clearRoute()" style="font-size:12px;padding:4px 10px;background:none;border:1.5px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer">✕ Poistu</button>
+  </div>
 </div>
 
 <div class="model-tabs" id="model-tabs-bar">
@@ -249,7 +260,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 <script>
 // Cache-buster: pakota tuorein versio
 (function(){
-  var CURRENT = 'v8.3';
+  var CURRENT = 'v8.4';
   var p = window.location.search;
   if (p.indexOf('nocache') === -1 && p.indexOf('v='+CURRENT) === -1) {
     if (window.caches) { caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }); }
@@ -288,7 +299,7 @@ function checkVersionManual() {
 window.checkVersionManual = checkVersionManual;
 </script>
 <script>
-var APP_VERSION = 'v8.3';
+var APP_VERSION = 'v8.4';
 (function(){ var b = document.getElementById('ver-badge'); if (b) b.textContent = APP_VERSION; })();
 
 // ── ASETUKSET ─────────────────────────────────────────────
@@ -667,8 +678,232 @@ function fetchGPS() {
   }, function() { alert('GPS-lupa puuttuu.'); });
 }
 
+// ── REITTIENNUSTE ────────────────────────────────────────────────────────────
+var BOAT_KTS = 5;      // keskinopeus
+var TACK_DEG = 42;     // nousukulma
+var gpxWaypoints = null;
+
+function haversineNM(a,b,c,d){
+  var R=3440.065,dL=(c-a)*Math.PI/180,dO=(d-b)*Math.PI/180;
+  var x=Math.sin(dL/2)*Math.sin(dL/2)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dO/2)*Math.sin(dO/2);
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function bearingDeg(a,b,c,d){
+  var dO=(d-b)*Math.PI/180;
+  var y=Math.sin(dO)*Math.cos(c*Math.PI/180);
+  var x=Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180)-Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos(dO);
+  return(Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+function parseGPX(xml) {
+  var doc=new DOMParser().parseFromString(xml,'text/xml');
+  // iSailor käyttää rtept-elementtejä, muut wpt
+  var nodes=doc.querySelectorAll('rtept, wpt');
+  var pts=[];
+  nodes.forEach(function(n){
+    var la=parseFloat(n.getAttribute('lat')), lo=parseFloat(n.getAttribute('lon'));
+    var nm=(n.querySelector('name')||{textContent:''}).textContent.trim()||('WP'+(pts.length+1));
+    if(!isNaN(la)&&!isNaN(lo)) pts.push({name:nm,lat:la,lon:lo});
+  });
+  return pts;
+}
+
+function routingCalc(windDir, courseDir) {
+  // Laske true wind angle (0-180°)
+  var diff=((courseDir-windDir+360)%360);
+  var twa=diff>180?360-diff:diff;
+  var sb=Math.round((windDir+TACK_DEG+360)%360);
+  var bb=Math.round((windDir-TACK_DEG+360)%360);
+  var vmgUp=+(BOAT_KTS*Math.cos(TACK_DEG*Math.PI/180)).toFixed(1);
+  if(twa<TACK_DEG){
+    return{mode:'HALSSAUS',sb:sb,bb:bb,vmg:vmgUp,twa:Math.round(twa),direct:false};
+  }
+  var mode=twa<70?'Nousussa':twa<120?'Traverssi':'Vapaatuuli';
+  return{mode:mode,sb:null,bb:null,vmg:BOAT_KTS,twa:Math.round(twa),direct:true};
+}
+
+function windAtTime(hourly, dt) {
+  var fmt=new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false});
+  var pp={}; fmt.formatToParts(dt).forEach(function(p){pp[p.type]=p.value;});
+  var target=pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':00';
+  for(var i=0;i<hourly.time.length;i++){
+    if(hourly.time[i]===target) return{
+      ws:hourly.windspeed_10m[i],
+      wd:hourly.winddirection_10m[i],
+      gust:hourly.windgusts_10m?hourly.windgusts_10m[i]:null
+    };
+  }
+  return null;
+}
+
+function ensembleWind(wpCache, dt) {
+  var wss=[],wds=[],gusts=[];
+  ['icon','ecmwf','metno'].forEach(function(k){
+    if(!wpCache[k]) return;
+    var w=windAtTime(wpCache[k],dt);
+    if(!w||w.ws==null||isNaN(w.ws)) return;
+    wss.push(w.ws); wds.push(w.wd);
+    if(w.gust!=null&&!isNaN(w.gust)&&w.gust>=w.ws) gusts.push(w.gust);
+  });
+  if(!wss.length) return null;
+  var wsMean=wss.reduce(function(a,b){return a+b;})/wss.length;
+  var sinS=0,cosS=0;
+  wds.forEach(function(d){sinS+=Math.sin(d*Math.PI/180);cosS+=Math.cos(d*Math.PI/180);});
+  var wdMean=(Math.atan2(sinS/wds.length,cosS/wds.length)*180/Math.PI+360)%360;
+  var gustMean=gusts.length?gusts.reduce(function(a,b){return a+b;})/gusts.length:wsMean*1.35;
+  return{ws:wsMean,wd:wdMean,gust:Math.max(gustMean,wsMean),
+         spread:Math.max.apply(null,wss)-Math.min.apply(null,wss),models:wss.length};
+}
+
+function defaultDepTime(){
+  var d=new Date(); d.setDate(d.getDate()+1); d.setHours(9,0,0,0);
+  var fmt=new Intl.DateTimeFormat('fi-FI',{timeZone:'Europe/Helsinki',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  var pp={}; fmt.formatToParts(d).forEach(function(p){pp[p.type]=p.value;});
+  return pp.year+'-'+pp.month+'-'+pp.day+'T'+pp.hour+':'+pp.minute;
+}
+
+function loadGPXFile(input){
+  var file=input.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var pts=parseGPX(e.target.result);
+    if(!pts.length){alert('GPX ei sisällä reittipisteitä (rtept/wpt). Tarkista iSailor-export.');return;}
+    gpxWaypoints=pts;
+    var totalNM=0;
+    for(var i=0;i<pts.length-1;i++) totalNM+=haversineNM(pts[i].lat,pts[i].lon,pts[i+1].lat,pts[i+1].lon);
+    document.getElementById('route-info').textContent=
+      pts[0].name+' → '+pts[pts.length-1].name+' · '+pts.length+' WP · '+Math.round(totalNM)+' M';
+    document.getElementById('route-dep').value=defaultDepTime();
+    document.getElementById('route-panel').style.display='block';
+    calcRoute();
+  };
+  reader.readAsText(file);
+}
+
+function clearRoute(){
+  gpxWaypoints=null;
+  document.getElementById('route-panel').style.display='none';
+  document.getElementById('gpx-file').value='';
+  load();
+}
+
+async function calcRoute(){
+  var pts=gpxWaypoints;
+  if(!pts||pts.length<2) return;
+  var depVal=document.getElementById('route-dep').value;
+  if(!depVal) return;
+  var startTime=new Date(depVal);
+  var mc=document.getElementById('main-content');
+  mc.innerHTML='<div class="loading"><span class="spin">⧗</span><br><br>Haetaan reittiennustetta…<br><small style="color:var(--muted)">'+pts.length+' WP × 3 mallia</small></div>';
+
+  // Laske ETA per WP 5 kts tasanopeudella
+  var etas=[startTime], cumNM=[0];
+  for(var i=0;i<pts.length-1;i++){
+    var nm=haversineNM(pts[i].lat,pts[i].lon,pts[i+1].lat,pts[i+1].lon);
+    cumNM.push(cumNM[i]+nm);
+    etas.push(new Date(etas[i].getTime()+(nm/BOAT_KTS)*3600000));
+  }
+  var totalNM=cumNM[cumNM.length-1];
+
+  // Hae sää: malli kerrallaan, WP kerrallaan (ei throttlaus-ongelmia)
+  var wxCache={};
+  pts.forEach(function(_,i){wxCache[i]={};});
+  var RMODELS=[{key:'icon',model:'icon_seamless'},{key:'ecmwf',model:'ecmwf_ifs'},{key:'metno',model:'metno_nordic'}];
+
+  for(var mi=0;mi<RMODELS.length;mi++){
+    var mdl=RMODELS[mi];
+    for(var wi=0;wi<pts.length;wi++){
+      var wp=pts[wi];
+      var url='https://api.open-meteo.com/v1/forecast'
+        +'?latitude='+wp.lat.toFixed(4)+'&longitude='+wp.lon.toFixed(4)
+        +'&hourly=windspeed_10m,winddirection_10m,windgusts_10m'
+        +'&windspeed_unit=ms&timezone=Europe/Helsinki&models='+mdl.model+'&forecast_days=7';
+      try{
+        var ctrl=new AbortController();
+        setTimeout(function(){ctrl.abort();},12000);
+        var r=await fetch(url,{signal:ctrl.signal});
+        if(r.ok){var d=await r.json();if(d&&d.hourly&&d.hourly.windspeed_10m)wxCache[wi][mdl.key]=d.hourly;}
+      }catch(e){}
+    }
+  }
+
+  // Renderöi tulokset
+  var fmtDT=function(dt){
+    return dt.toLocaleDateString('fi-FI',{weekday:'short',day:'numeric',month:'numeric'})
+      +' '+dt.toLocaleTimeString('fi-FI',{hour:'2-digit',minute:'2-digit'});
+  };
+
+  var html='<div style="background:var(--card);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="font-size:13px;font-weight:700;color:#0a4272">⛵ '+pts[0].name+' → '+pts[pts.length-1].name+'</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:2px">'
+      +'Lähtö '+fmtDT(startTime)
+      +' · '+Math.round(totalNM)+' M'
+      +' · ETA '+fmtDT(etas[etas.length-1])
+      +' ('+BOAT_KTS+' kts tasanopeus)'
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-top:2px">'
+      +'±=mallien hajonta · ICON+ECMWF+MetNO · nousukulma '+TACK_DEG+'°'
+    +'</div>'
+    +'</div>';
+
+  for(var i=0;i<pts.length;i++){
+    var wx=ensembleWind(wxCache[i],etas[i]);
+    var si=wx?sailCalc(Math.round(wx.ws),Math.round(wx.gust)):{s:0,lbl:'–',col:'#999',bg:'#eee',reef:'',desc:''};
+    var brg=i<pts.length-1?Math.round(bearingDeg(pts[i].lat,pts[i].lon,pts[i+1].lat,pts[i+1].lon)):null;
+    var routing=wx&&brg!==null?routingCalc(wx.wd,brg):null;
+    var legLabel=i===0?'Lähtö':fmtDT(etas[i]);
+    var distLabel=i===0?'0 M':Math.round(cumNM[i])+' M';
+
+    html+='<div style="background:var(--card);border-radius:8px;margin-bottom:6px;overflow:hidden">';
+
+    // Ylärivi: aika + nimi + tuuli
+    html+='<div style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 10px 4px;align-items:start">';
+    html+='<div>';
+    html+='<div style="font-size:11px;color:var(--muted)">'+legLabel+'</div>';
+    html+='<div style="font-size:14px;font-weight:700;margin-top:1px">'+pts[i].name+'</div>';
+    html+='<div style="font-size:10px;color:var(--muted)">'+distLabel+(brg!==null?' · kurssi '+brg+'°':'')+'</div>';
+    html+='</div>';
+    // Tuulidata oikealle
+    if(wx){
+      var spCol=wx.spread<1.5?'#1a7a4a':wx.spread<3?'#b87c1a':'#b82222';
+      html+='<div style="text-align:right">';
+      html+='<div style="font-size:18px;font-weight:700">'+wx.ws.toFixed(1)+' <span style="font-size:11px;font-weight:400;color:var(--muted)">m/s</span></div>';
+      html+='<div style="font-size:11px;color:var(--muted)">↑'+wx.gust.toFixed(1)+' m/s · '+Math.round(wx.wd)+'° '+dirCard(wx.wd)+'</div>';
+      html+='<div style="font-size:10px;font-weight:600;color:'+spCol+'">±'+wx.spread.toFixed(1)+' ('+wx.models+' mallia)</div>';
+      html+='</div>';
+    } else {
+      html+='<div style="font-size:11px;color:var(--muted)">ei dataa</div>';
+    }
+    html+='</div>';
+
+    // Alarivi: purjelutieto + routing
+    if(wx&&routing){
+      html+='<div style="padding:4px 10px 8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border)">';
+      // Purjeluindeksi-badge
+      var badge=si.reef||si.lbl;
+      html+='<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;background:'+si.bg+';color:'+si.col+'">'+badge+'</span>';
+      if(routing.mode==='HALSSAUS'){
+        html+='<span style="font-size:11px;font-weight:700;color:#b87c1a">⚠️ HALSSAUS</span>';
+        html+='<span style="font-size:11px">SB&nbsp;<strong>'+routing.sb+'°</strong></span>';
+        html+='<span style="font-size:11px">BB&nbsp;<strong>'+routing.bb+'°</strong></span>';
+        html+='<span style="font-size:11px;font-weight:700;color:#0a4272">VMG '+routing.vmg+' kts</span>';
+      } else {
+        html+='<span style="font-size:11px;color:var(--muted)">'+routing.mode+'&nbsp;·&nbsp;TWA&nbsp;'+routing.twa+'°</span>';
+        html+='<span style="font-size:11px;font-weight:700;color:#0a4272">'+BOAT_KTS+' kts</span>';
+      }
+      html+='</div>';
+    }
+    html+='</div>';
+  }
+
+  mc.innerHTML=html;
+}
+
 window.switchModel = switchModel;
 window.setLoc = setLoc;
+window.loadGPXFile = loadGPXFile;
+window.clearRoute = clearRoute;
+window.calcRoute = calcRoute;
 window.searchLoc = searchLoc;
 window.fetchGPS = fetchGPS;
 window.load = load;
