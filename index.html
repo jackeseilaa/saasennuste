@@ -212,6 +212,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
   <button class="ql" onclick="setLoc('Hanko',59.8264,23.0010,this)">Hanko</button>
   <button class="ql" onclick="setLoc('Turku',60.4518,22.2666,this)">Turku</button>
   <button class="ql" onclick="setLoc('Tallinna',59.4370,24.7536,this)">Tallinna</button>
+  <button class="ql" onclick="setLoc('Riihimäki',60.7471,24.7591,this)">🏠 Riihimäki</button>
 </div>
 
 <div class="model-tabs" id="model-tabs-bar">
@@ -248,7 +249,7 @@ html, body { background: var(--bg); color: var(--text); font-family: -apple-syst
 <script>
 // Cache-buster: pakota tuorein versio
 (function(){
-  var CURRENT = 'v8.2';
+  var CURRENT = 'v8.3';
   var p = window.location.search;
   if (p.indexOf('nocache') === -1 && p.indexOf('v='+CURRENT) === -1) {
     if (window.caches) { caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }); }
@@ -287,7 +288,7 @@ function checkVersionManual() {
 window.checkVersionManual = checkVersionManual;
 </script>
 <script>
-var APP_VERSION = 'v8.2';
+var APP_VERSION = 'v8.3';
 (function(){ var b = document.getElementById('ver-badge'); if (b) b.textContent = APP_VERSION; })();
 
 // ── ASETUKSET ─────────────────────────────────────────────
